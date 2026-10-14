@@ -15,18 +15,18 @@ import { usersRouter } from "./users";
  * Board API, mounted at /api behind the session check (src/worker/app.ts).
  * c.get("user") is the signed-in person; every write is theirs. Errors become
  * JSON error bodies here too, so the routes behave the same wherever the
- * router is mounted.
+ * router is mounted. /api/sessions lives in ./sessions.ts.
  */
-export const apiRouter = new Hono<AppBindings>()
-  .route("/", feedRouter)
-  .route("/notes", notesRouter)
-  .route("/tasks", tasksRouter)
-  .route("/links", linksRouter)
-  .route("/labels", labelsRouter)
-  .route("/users", usersRouter)
-  .route("/settings", settingsRouter)
-  .route("/events", eventsRouter)
-  .route("/history", historyRouter)
-  .route("/runs", runsRouter);
+export const apiRouter = new Hono<AppBindings>();
 
+apiRouter.route("/", feedRouter);
+apiRouter.route("/notes", notesRouter);
+apiRouter.route("/tasks", tasksRouter);
+apiRouter.route("/links", linksRouter);
+apiRouter.route("/labels", labelsRouter);
+apiRouter.route("/users", usersRouter);
+apiRouter.route("/settings", settingsRouter);
+apiRouter.route("/events", eventsRouter);
+apiRouter.route("/history", historyRouter);
+apiRouter.route("/runs", runsRouter);
 apiRouter.onError(jsonError);

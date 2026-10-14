@@ -9,6 +9,7 @@ import type { AppBindings } from "../env";
 import { NotFoundError } from "../lib/errors";
 import { jsonBody } from "../lib/http";
 import { mutate } from "../mutate/index";
+import { defaultLabelId } from "../settings";
 import { actorOf, taskResponse, toRow } from "./request";
 
 const taskFields = {
@@ -40,7 +41,12 @@ export const tasksRouter = new Hono<AppBindings>()
     const db = c.env.DB;
     const body = await jsonBody(c, createTask);
     await Promise.all([checkLabelId(db, body.label_id), checkAssigneeId(db, body.assignee_id)]);
-    const result = await mutate(db, actorOf(c), { entity: "task", action: "create", values: toRow(body) });
+    const labelId = body.label_id === undefined ? await defaultLabelId(db) : body.label_id;
+    const result = await mutate(db, actorOf(c), {
+      entity: "task",
+      action: "create",
+      values: toRow({ ...body, label_id: labelId }),
+    });
     return c.json(await taskResponse(db, result), 201);
   })
   .patch("/:id", async (c) => {

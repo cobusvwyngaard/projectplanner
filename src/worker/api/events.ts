@@ -17,7 +17,7 @@ const ENTITY_TYPES = [
 
 const eventsQuery = z
   .strictObject({
-    actor: z.enum(["human", "claude", "system"], "actor must be human, claude or system.").optional(),
+    actor: z.enum(["human", "claude", "system"], "Choose human, claude or system.").optional(),
     user_id: fields.id.optional(),
     run_id: fields.id.optional(),
     from: fields.localDate.optional(),

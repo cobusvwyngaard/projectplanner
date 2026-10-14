@@ -101,8 +101,8 @@ describe("POST /api/notes", () => {
   it.each([
     ["a title that is too long", { title: "x".repeat(201) }, "title: A title can be at most 200 characters."],
     ["a body that is too long", { body: "x".repeat(20_001) }, "body: The text can be at most 20 000 characters."],
-    ["a note that is too narrow", { w: 119 }, "w: A note must be at least 120 wide."],
-    ["a note that is too high", { h: 2001 }, "h: A note can be at most 2000 high."],
+    ["a note that is too narrow", { w: 119 }, "w: A note must be at least 120 pixels wide."],
+    ["a note that is too high", { h: 2001 }, "h: A note can be at most 2000 pixels high."],
     ["a position far off the board", { x: 1_000_001, y: 0 }, "x: That position is too far from the centre of the board."],
     ["only one coordinate", { x: 5 }, "x: Give both x and y, or neither to let the board find a free spot."],
     ["a coordinate that is not a number", { x: "5", y: 5 }, "x: Invalid input: expected number, received string"],
@@ -117,6 +117,27 @@ describe("POST /api/notes", () => {
   it("refuses a body that is not JSON", async () => {
     const error = await fails(api.post("/api/notes", "{not json"), 400);
     expect(error.message).toBe("The request body must be JSON.");
+  });
+});
+
+describe("the default label", () => {
+  it("is given to new notes and tasks that name no label", async () => {
+    const home = await createLabel("Home");
+    const work = await createLabel("Work");
+    await ok(api.put("/api/settings/default_label_id", { value: home.row.id }));
+    expect((await createNote({ title: "Defaulted" })).row.label_id).toBe(home.row.id);
+    expect((await createTask({ title: "Defaulted" })).row.label_id).toBe(home.row.id);
+    expect((await createNote({ title: "Chosen", label_id: work.row.id })).row.label_id).toBe(work.row.id);
+    expect((await createTask({ title: "None", label_id: null })).row.label_id).toBeNull();
+  });
+
+  it("is ignored once that label is archived", async () => {
+    const home = await createLabel("Home");
+    await ok(api.put("/api/settings/default_label_id", { value: home.row.id }));
+    // Archive the label behind the API's back (the archive route also clears the setting).
+    await db.prepare("UPDATE labels SET archived_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").bind(home.row.id).run();
+    expect((await createNote({ title: "x" })).row.label_id).toBeNull();
+    expect((await createTask({ title: "x" })).row.label_id).toBeNull();
   });
 });
 

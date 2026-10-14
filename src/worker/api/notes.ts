@@ -9,6 +9,7 @@ import type { AppBindings } from "../env";
 import { NotFoundError } from "../lib/errors";
 import { jsonBody } from "../lib/http";
 import { mutate } from "../mutate/index";
+import { defaultLabelId } from "../settings";
 import { actorOf, noteResponse, toRow } from "./request";
 
 const noteFields = {
@@ -35,12 +36,13 @@ export const notesRouter = new Hono<AppBindings>()
     const db = c.env.DB;
     const body = await jsonBody(c, createNote);
     await checkLabelId(db, body.label_id);
+    const labelId = body.label_id === undefined ? await defaultLabelId(db) : body.label_id;
     const size = { w: body.w ?? DEFAULT_NOTE_SIZE.w, h: body.h ?? DEFAULT_NOTE_SIZE.h };
     const spot = body.x !== undefined && body.y !== undefined ? { x: body.x, y: body.y } : await placeNote(db, size);
     const result = await mutate(db, actorOf(c), {
       entity: "note",
       action: "create",
-      values: toRow({ ...body, ...size, ...spot }),
+      values: toRow({ ...body, label_id: labelId, ...size, ...spot }),
     });
     return c.json(await noteResponse(db, result), 201);
   })

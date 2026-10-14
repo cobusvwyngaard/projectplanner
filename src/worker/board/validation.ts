@@ -39,12 +39,12 @@ export const fields = {
     .max(LIMITS.coordinate, "That position is too far from the centre of the board."),
   noteWidth: z
     .number()
-    .min(LIMITS.noteWidth.min, `A note must be at least ${LIMITS.noteWidth.min} wide.`)
-    .max(LIMITS.noteWidth.max, `A note can be at most ${LIMITS.noteWidth.max} wide.`),
+    .min(LIMITS.noteWidth.min, `A note must be at least ${LIMITS.noteWidth.min} pixels wide.`)
+    .max(LIMITS.noteWidth.max, `A note can be at most ${LIMITS.noteWidth.max} pixels wide.`),
   noteHeight: z
     .number()
-    .min(LIMITS.noteHeight.min, `A note must be at least ${LIMITS.noteHeight.min} high.`)
-    .max(LIMITS.noteHeight.max, `A note can be at most ${LIMITS.noteHeight.max} high.`),
+    .min(LIMITS.noteHeight.min, `A note must be at least ${LIMITS.noteHeight.min} pixels high.`)
+    .max(LIMITS.noteHeight.max, `A note can be at most ${LIMITS.noteHeight.max} pixels high.`),
   labelName: z
     .string()
     .trim()

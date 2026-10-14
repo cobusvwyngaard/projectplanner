@@ -10,7 +10,7 @@ import { revertRun } from "../mutate/revert";
 import { actorOf, optionalJsonBody, queryParams, revertBody, revertResponse } from "./request";
 
 const runsQuery = z.strictObject({
-  before: z.iso.datetime("before must be a run's started_at time.").optional(),
+  before: z.iso.datetime("Use the started_at time of the last run shown.").optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 

@@ -4,7 +4,8 @@
 // (entity 'setting'), so every change is an event.
 
 import { z } from "zod";
-import type { SettingKey, SettingsMap } from "../shared/types";
+import type { Id, SettingKey, SettingsMap } from "../shared/types";
+import { getRow } from "./board/queries";
 import { checkLabelId, fields } from "./board/validation";
 import type { Mutation } from "./mutate/index";
 
@@ -71,6 +72,14 @@ export async function readSettings(db: D1Database): Promise<SettingsMap> {
     stt_keyterms_enabled: readOne("stt_keyterms_enabled", stored),
     default_label_id: readOne("default_label_id", stored),
   };
+}
+
+/** The label a new note or task gets when none is given: the default label, while it is active. */
+export async function defaultLabelId(db: D1Database): Promise<Id | null> {
+  const { default_label_id: id } = await readSettings(db);
+  if (id === null) return null;
+  const label = await getRow(db, "label", id);
+  return label?.archived_at === null ? id : null;
 }
 
 /** Run the database checks of a setting on an already parsed value. */

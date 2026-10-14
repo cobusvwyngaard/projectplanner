@@ -134,7 +134,7 @@ describe("GET /api/events", () => {
   });
 
   it.each([
-    ["an unknown actor", "?actor=robot", "actor: actor must be human, claude or system."],
+    ["an unknown actor", "?actor=robot", "actor: Choose human, claude or system."],
     ["a limit of 0", "?limit=0", "limit: Too small: expected number to be >=1"],
     ["a limit over 200", "?limit=201", "limit: Too big: expected number to be <=200"],
     ["a seq that is not a number", "?before=abc", "before: Invalid input: expected number, received NaN"],

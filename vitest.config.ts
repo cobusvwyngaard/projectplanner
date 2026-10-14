@@ -13,6 +13,11 @@ export default defineConfig(async () => {
             cloudflareTest({
               wrangler: { configPath: "./wrangler.jsonc" },
               miniflare: {
+                // Fixed static files instead of dist/client, so tests do not
+                // depend on whether the app has been built.
+                assets: { directory: "./test/fixtures/client" },
+                // These are merged over wrangler.jsonc and .dev.vars, so they
+                // win whatever .dev.vars holds (test/worker/app.test.ts checks).
                 bindings: {
                   TEST_MIGRATIONS: migrations,
                   // Obvious test placeholders; real phrases are Worker secrets.

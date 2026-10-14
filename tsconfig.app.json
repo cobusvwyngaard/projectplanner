@@ -7,5 +7,5 @@
     "outDir": "dist/types/app",
     "tsBuildInfoFile": "dist/types/app.tsbuildinfo"
   },
-  "include": ["src/app", "src/shared", "test/unit"]
+  "include": ["src/app", "src/shared"]
 }

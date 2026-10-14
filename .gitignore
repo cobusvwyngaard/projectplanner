@@ -1,3 +1,10 @@
-.wrangler/
 node_modules/
-.dev.vars*
+dist/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+test-results/
+playwright-report/
+*.log
+.DS_Store

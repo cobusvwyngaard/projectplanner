@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local development. These are obvious placeholders,
+# never real phrases or keys. Real values are set with `wrangler secret put`.
+LOGIN_PHRASE_1="local test phrase one"
+LOGIN_PHRASE_2="local test phrase two"
+ELEVENLABS_API_KEY="placeholder-not-a-real-key"
+TRANSCRIBER="mock"

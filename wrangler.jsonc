@@ -1,11 +1,56 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "projectplanner",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2026-10-12",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
+  // The SPA is built by Vite before every deploy and every `wrangler dev`.
+  "build": {
+    "command": "npm run build:client",
+    "watch_dir": ["src/app", "src/shared", "index.html", "static"]
+  },
   "assets": {
-    "directory": "public"
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    // Every request goes through the Worker first so the session check runs
+    // before any part of the app is served.
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  // database_id and the bucket are resolved by name; `wrangler deploy` creates
+  // them on the first deploy if they do not exist yet (see SETUP.md).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "projectplanner",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AUDIO",
+      "bucket_name": "projectplanner-audio"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_OBJECT",
+        "class_name": "PlannerMcp"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PlannerMcp"]
+    }
+  ],
+  "triggers": {
+    // Retry pending or failed transcriptions and close abandoned Claude runs.
+    "crons": ["*/10 * * * *"]
   }
 }

@@ -3,7 +3,7 @@
 // of the event it reverts.
 
 import type { PlannerEvent } from "../../shared/types";
-import { ConflictError, NotFoundError, ValidationError } from "../lib/errors";
+import { AppError, NotFoundError, ValidationError } from "../lib/errors";
 import type { Actor } from "./actor";
 import { ENTITIES, type MutableEntity } from "./entities";
 import { EVENT_COLUMNS, parseEventRow, type EventRow } from "./events";
@@ -27,9 +27,9 @@ export interface RevertOutcome {
 }
 
 /** Thrown when later changes touched the same fields and confirm was not given. */
-export class RevertConflictError extends ConflictError {
+export class RevertConflictError extends AppError {
   constructor(readonly conflicts: RevertConflict[]) {
-    super("Later changes touched the same fields. Confirm to revert anyway.", { conflicts });
+    super(409, "revert_conflict", "Later changes touched the same fields. Confirm to revert anyway.", { conflicts });
   }
 }
 

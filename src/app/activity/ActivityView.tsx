@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RunView } from "../../shared/api";
 import { actorLabel } from "../../shared/actors";
 import { formatDateTime } from "../../shared/format";
-import type { Id, PlannerEvent } from "../../shared/types";
+import type { Id, ItemRef, PlannerEvent } from "../../shared/types";
 import { api, errorMessage } from "../api";
 import { EventEntry, RevertButton, RevertConflicts, useRevert } from "../components/events";
 import type { DescribeContext } from "../lib/events";
@@ -24,7 +24,6 @@ import {
   type ActivityFilters,
   type Feed,
 } from "../lib/activity";
-import { openItem } from "../router";
 import { usePlanner } from "../store";
 import { reportError } from "../toast";
 
@@ -85,10 +84,9 @@ function useDescribeContext(titles: Readonly<Record<string, string>>): DescribeC
 const NO_TITLES: Readonly<Record<string, string>> = {};
 
 /** Notes and tasks open in the item panel (archived ones too, from their history). */
-function opener(event: PlannerEvent): (() => void) | undefined {
+function opens(event: PlannerEvent): ItemRef | undefined {
   const type = event.entity_type;
-  if (type !== "note" && type !== "task") return undefined;
-  return () => openItem({ type, id: event.entity_id });
+  return type === "note" || type === "task" ? { type, id: event.entity_id } : undefined;
 }
 
 function ChangesFeed({
@@ -251,7 +249,7 @@ function ChangesFeed({
               event={event}
               ctx={ctx}
               extras={feed}
-              onOpenTitle={opener(event)}
+              open={opens(event)}
               onRunClick={onShowRun}
               onReverted={refresh}
             />

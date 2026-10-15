@@ -1,13 +1,13 @@
 // The app shell: header with the navigation (a bottom tab bar on phones), the
 // current view, the item panel over it and the toasts.
 
-import { Suspense, lazy, useEffect, useState, type JSX, type MouseEvent } from "react";
+import { Suspense, lazy, useEffect, useState, type JSX } from "react";
 import { ActivityView } from "./activity/ActivityView";
 import { ActivityIcon, BoardIcon, ListIcon, SettingsIcon } from "./components/icons";
 import { useIsPhone } from "./hooks";
 import { ListView } from "./list/ListView";
 import { ItemPanel } from "./panel/ItemPanel";
-import { ROUTES, goTo, navigate, routeOf, useLocation, type Route } from "./router";
+import { ROUTES, followLink, goTo, navigate, routeOf, useLocation, type Route } from "./router";
 import { SettingsView } from "./settings/SettingsView";
 import { store, useLoadStatus, usePlanner, useSyncTrouble } from "./store";
 import { Toasts } from "./toast";
@@ -130,13 +130,6 @@ function View({ route }: { route: Route | null }) {
         </div>
       );
   }
-}
-
-/** Plain clicks navigate inside the app; modified clicks (new tab) are left to the browser. */
-function followLink(e: MouseEvent<HTMLAnchorElement>, go: () => void): void {
-  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-  e.preventDefault();
-  go();
 }
 
 function NavLinks({ current, className }: { current: Route | null; className: string }) {

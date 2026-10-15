@@ -4,9 +4,10 @@
 
 import { useState, type ReactNode } from "react";
 import type { RevertConflictView, RevertResponse } from "../../shared/api";
-import type { Capture, Id, PlannerEvent, Run } from "../../shared/types";
+import type { Capture, Id, ItemRef, PlannerEvent, Run } from "../../shared/types";
 import { api, captureAudioUrl, revertConflicts } from "../api";
 import { describeEvent, fieldLabel, type DescribeContext, type FieldChange } from "../lib/events";
+import { followLink, itemHref, openItem } from "../router";
 import { store } from "../store";
 import { reportError, showToast } from "../toast";
 import { TimeAgo } from "./ui";
@@ -50,30 +51,32 @@ export function EventSentence({
   event,
   ctx,
   self = false,
-  onOpenTitle,
+  open,
 }: {
   event: PlannerEvent;
   ctx: DescribeContext;
   self?: boolean;
-  onOpenTitle?: (() => void) | undefined;
+  /** The item the title links to (opens the item panel) */
+  open?: ItemRef | undefined;
 }) {
   const view = describeEvent(event, ctx);
   const noun = self ? `this ${event.entity_type}` : view.noun;
   let title: ReactNode = null;
   if (!self && view.title !== null) {
-    title = onOpenTitle ? (
-      <button type="button" className="link-button" onClick={onOpenTitle}>
-        {view.title}
-      </button>
+    const quoted = `“${view.title}”`;
+    title = open ? (
+      <a className="event-link" href={itemHref(open)} onClick={(e) => followLink(e, () => openItem(open))}>
+        {quoted}
+      </a>
     ) : (
-      <span className="event-title">{view.title}</span>
+      <span className="event-title">{quoted}</span>
     );
   }
   return (
     <span className="event-sentence">
       <span className={`badge badge--${event.actor_kind}`}>{view.actor}</span> {view.verb}
       {noun && ` ${noun}`}
-      {title && <> “{title}”</>}
+      {title && <> {title}</>}
       {view.suffix && ` ${view.suffix}`}
     </span>
   );
@@ -119,7 +122,7 @@ export function EventEntry({
   ctx,
   extras,
   self = false,
-  onOpenTitle,
+  open,
   onRunClick,
   onReverted,
 }: {
@@ -128,7 +131,8 @@ export function EventEntry({
   extras: EventExtras;
   /** The event is about the item whose history this is */
   self?: boolean;
-  onOpenTitle?: (() => void) | undefined;
+  /** The item the title links to */
+  open?: ItemRef | undefined;
   /** Feed rows: show the run as a button that calls this */
   onRunClick?: ((runId: Id) => void) | undefined;
   onReverted: () => void;
@@ -143,7 +147,7 @@ export function EventEntry({
   return (
     <li className={`event event--${event.actor_kind}`}>
       <div className="event-head">
-        <EventSentence event={event} ctx={ctx} self={self} onOpenTitle={onOpenTitle} />
+        <EventSentence event={event} ctx={ctx} self={self} open={open} />
         <span className="event-meta">
           <TimeAgo ts={event.ts} />
           {view.revertible && <RevertButton revert={revert} label="Revert" title="Undo this change" />}
@@ -181,7 +185,7 @@ export function EventEntry({
           ))}
         </div>
       )}
-      <RevertConflicts revert={revert} ctx={ctx} />
+      <RevertConflicts revert={revert} ctx={ctx} self={self} />
     </li>
   );
 }
@@ -276,7 +280,7 @@ export function RevertButton({ revert, label, title }: { revert: Revert; label: 
 }
 
 /** The later changes a revert would overwrite, with "Revert anyway" and Cancel. */
-export function RevertConflicts({ revert, ctx }: { revert: Revert; ctx: DescribeContext }) {
+export function RevertConflicts({ revert, ctx, self = false }: { revert: Revert; ctx: DescribeContext; self?: boolean }) {
   if (!revert.conflicts) return null;
   const shown: DescribeContext = revert.titles ? { ...ctx, titles: { ...ctx.titles, ...revert.titles } } : ctx;
   return (
@@ -287,7 +291,7 @@ export function RevertConflicts({ revert, ctx }: { revert: Revert; ctx: Describe
       <ul>
         {revert.conflicts.map(({ event, fields }) => (
           <li key={event.id}>
-            <EventSentence event={event} ctx={shown} /> <TimeAgo ts={event.ts} />
+            <EventSentence event={event} ctx={shown} self={self} /> <TimeAgo ts={event.ts} />
             <span className="conflict-fields"> ({fields.join(", ")})</span>
           </li>
         ))}

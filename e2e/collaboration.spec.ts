@@ -146,7 +146,7 @@ test("two people plan together and every change is attributed", async ({ browser
   });
 
   await test.step("one change is reverted from the item's history", async () => {
-    await p1.locator(".feed .event").filter({ hasText: `${who.p2} changed the task` }).getByRole("button", { name: renamed }).first().click();
+    await p1.locator(".feed .event").filter({ hasText: `${who.p2} changed the task` }).getByRole("link", { name: renamed }).first().click();
     await expect(panel(p1).getByLabel("Title")).toHaveValue(renamed);
     await historyEntry(p1, `${who.p2} changed this task`).filter({ hasText: "Title:" }).getByRole("button", { name: "Revert" }).click();
     await expect(p1.locator(".toast").last()).toContainText("Reverted 1 change.");
@@ -168,7 +168,7 @@ test("two people plan together and every change is attributed", async ({ browser
     await first.getByRole("button", { name: "Revert" }).click();
     const conflict = first.locator(".conflict");
     await expect(conflict).toContainText("Later changes touched the same fields.");
-    await expect(conflict).toContainText(`${who.p2} changed the task`);
+    await expect(conflict).toContainText(`${who.p2} changed this task`);
     await expect(conflict).toContainText("(Details)");
     await conflict.getByRole("button", { name: "Revert anyway" }).click();
     await expect(p1.locator(".toast").last()).toContainText("Reverted 1 change.");

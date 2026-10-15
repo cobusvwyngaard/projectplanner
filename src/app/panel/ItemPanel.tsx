@@ -14,7 +14,7 @@ import { ProvenanceLine, TimeAgo } from "../components/ui";
 import { useIsPhone } from "../hooks";
 import type { DescribeContext } from "../lib/events";
 import { asNote, asTask, linksOf, liveTitle, parseItemKey, rebuildRow } from "../lib/items";
-import { closeItem, openItem } from "../router";
+import { closeItem } from "../router";
 import { usePlanner } from "../store";
 import { AssigneePicker, DueDateField, LabelPicker, TextField } from "./fields";
 import { LinksSection } from "./LinksSection";
@@ -262,7 +262,7 @@ function History({ item, history, onReverted }: { item: ItemRef; history: Histor
             ctx={ctx}
             extras={extras}
             self={self}
-            onOpenTitle={canOpen && other ? () => openItem(other) : undefined}
+            open={canOpen && other ? other : undefined}
             onReverted={onReverted}
           />
         );

@@ -2,7 +2,7 @@
 // /settings) and the open item in the query string (?item=task:<id>), so the
 // back button closes the item panel on a phone.
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type MouseEvent } from "react";
 import type { ItemRef } from "../shared/types";
 import { itemKey } from "./lib/items";
 
@@ -64,6 +64,18 @@ function withItem(item: string | null): string {
   else params.set("item", item);
   const query = params.toString();
   return window.location.pathname + (query ? `?${query}` : "");
+}
+
+/** The current page with the item panel open on this item, for links. */
+export function itemHref(ref: ItemRef): string {
+  return withItem(itemKey(ref));
+}
+
+/** Plain clicks on a link navigate inside the app; modified clicks (new tab) are left to the browser. */
+export function followLink(e: MouseEvent<HTMLAnchorElement>, go: () => void): void {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  go();
 }
 
 /** Open the item panel. Switching between items replaces the history entry. */

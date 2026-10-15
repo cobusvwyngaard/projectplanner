@@ -1256,8 +1256,18 @@ fieldset:disabled .chip-option {
   overflow-wrap: anywhere;
 }
 
-.event-title {
+.event-title,
+.event-link {
   font-weight: 600;
+}
+
+.event-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.event-link:hover {
+  text-decoration: underline;
 }
 
 .event-meta {
@@ -1942,6 +1952,7 @@ fieldset:disabled .chip-option {
 
   .filters {
     flex-direction: column;
+    flex-wrap: nowrap;
     align-items: stretch;
   }
 
@@ -1982,7 +1993,8 @@ fieldset:disabled .chip-option {
 
   .filters .segment {
     flex: 1 1 0;
-    padding: 5px 6px;
+    min-width: 0;
+    padding: 5px 4px;
   }
 
   .label-row-main {

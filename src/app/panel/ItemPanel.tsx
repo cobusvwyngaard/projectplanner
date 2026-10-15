@@ -190,7 +190,11 @@ function TaskFields({ task, disabled }: { task: TaskView; disabled: boolean }) {
         onSave={async (detail) => (await updateTask(task.id, { detail })) !== undefined}
       />
       <AssigneePicker value={task.assignee_id} disabled={disabled} onChange={(id) => void updateTask(task.id, { assignee_id: id })} />
-      <DueDateField value={task.due_date} disabled={disabled} onChange={(due) => void updateTask(task.id, { due_date: due })} />
+      <DueDateField
+        value={task.due_date}
+        disabled={disabled}
+        onSave={async (due) => (await updateTask(task.id, { due_date: due })) !== undefined}
+      />
       <LabelPicker value={task.label_id} disabled={disabled} onChange={(id) => void updateTask(task.id, { label_id: id })} />
       <div className="field">
         <span className="field-label">Board</span>

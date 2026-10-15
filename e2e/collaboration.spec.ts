@@ -61,7 +61,7 @@ test("two people plan together and every change is attributed", async ({ browser
     await expect(panel(p1).getByLabel("Title")).toHaveValue(taskTitle);
 
     await panel(p1).getByRole("radio", { name: who.p2, exact: true }).check();
-    await panel(p1).getByLabel("Due date").fill(due);
+    await edit(panel(p1).getByLabel("Due date"), due);
     await panel(p1).getByRole("button", { name: "Link to…" }).click();
     await panel(p1).getByLabel("Search notes and tasks to link").fill(noteTitle);
     await panel(p1).getByRole("button", { name: noteTitle }).click();

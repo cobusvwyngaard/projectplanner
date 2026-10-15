@@ -1,6 +1,8 @@
 // Notes and tasks as "items": references, titles, links between them, the
-// Link to… search, and rebuilding an archived item from its history.
+// Link to… search, rebuilding an archived item from its history, and
+// checking a typed due date.
 
+import { isLocalDate } from "../../shared/dates";
 import { excerpt } from "../../shared/format";
 import type { Id, ItemRef, ItemType, Link, NoteView, PlannerEvent, TaskView } from "../../shared/types";
 
@@ -101,4 +103,21 @@ export function asNote(row: Record<string, unknown> | null): NoteView | null {
 export function asTask(row: Record<string, unknown> | null): TaskView | null {
   if (!row || typeof row.id !== "string" || typeof row.title !== "string" || typeof row.status !== "string") return null;
   return { ...(row as unknown as TaskView), prov: null };
+}
+
+/** Earliest year a typed due date may have (anything earlier is a typing slip). */
+const FIRST_DUE_YEAR = 1900;
+
+/**
+ * Why a typed due date cannot be saved, or null. `incomplete` is the date
+ * input's validity.badInput: some parts are still empty. An emptied field
+ * ("") clears the date.
+ */
+export function dueDateProblem(text: string, incomplete: boolean): string | null {
+  if (incomplete) return "Not saved: finish the day, month and year, or press Clear.";
+  if (text === "") return null;
+  if (!isLocalDate(text) || Number(text.slice(0, 4)) < FIRST_DUE_YEAR) {
+    return `Not saved: type the whole date, with a year from ${FIRST_DUE_YEAR} on.`;
+  }
+  return null;
 }

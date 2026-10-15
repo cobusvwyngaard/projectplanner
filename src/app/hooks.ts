@@ -86,6 +86,8 @@ export interface Draft {
   draft: string;
   change: (next: string) => void;
   commit: () => Promise<void>;
+  /** Drop the draft and show the saved value again (after saving it another way). */
+  cancel: () => void;
   saving: boolean;
   error: string | null;
 }
@@ -93,13 +95,29 @@ export interface Draft {
 /**
  * A draft of a saved value. While the user has unsaved typing, changes from
  * elsewhere do not overwrite it; a failed save leaves the draft in place.
+ * Typing still unsaved when the field goes away (the panel was closed with
+ * Back, which leaves the field without a blur) is saved then, and a failure
+ * is reported by the save's own toast.
  */
 export function useDraft(value: string, save: (next: string) => Promise<boolean>, validate?: (next: string) => string | null): Draft {
   const [draft, setDraft] = useState(value);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirtyState] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Mirrors of the state for handlers that run before a re-render (a change
+  // and a commit in one handler) and for the save on unmount.
   const latest = useRef(draft);
+  const dirtyNow = useRef(false);
+  const savingNow = useRef(false);
+  const props = useRef({ value, save, validate });
+  useEffect(() => {
+    props.current = { value, save, validate };
+  });
+
+  const setDirty = (next: boolean) => {
+    dirtyNow.current = next;
+    setDirtyState(next);
+  };
 
   useEffect(() => {
     if (!dirty) {
@@ -107,6 +125,16 @@ export function useDraft(value: string, save: (next: string) => Promise<boolean>
       latest.current = value;
     }
   }, [value, dirty]);
+
+  useEffect(
+    () => () => {
+      const { value: saved, save: persist, validate: check } = props.current;
+      const text = latest.current;
+      if (!dirtyNow.current || savingNow.current || text === saved || check?.(text)) return;
+      void persist(text);
+    },
+    [],
+  );
 
   const change = (next: string) => {
     latest.current = next;
@@ -116,7 +144,7 @@ export function useDraft(value: string, save: (next: string) => Promise<boolean>
   };
 
   const commit = async () => {
-    if (!dirty || saving) return;
+    if (!dirtyNow.current || savingNow.current) return;
     const text = latest.current;
     if (text === value) {
       setDirty(false);
@@ -127,13 +155,20 @@ export function useDraft(value: string, save: (next: string) => Promise<boolean>
       setError(problem);
       return;
     }
+    savingNow.current = true;
     setSaving(true);
     const ok = await save(text);
+    savingNow.current = false;
     setSaving(false);
     if (!ok) setError("Not saved yet. Your text is still here; try again.");
     // Typing that arrived while saving stays a draft.
     else if (latest.current === text) setDirty(false);
   };
 
-  return { draft, change, commit, saving, error };
+  const cancel = () => {
+    setDirty(false);
+    setError(null);
+  };
+
+  return { draft, change, commit, cancel, saving, error };
 }

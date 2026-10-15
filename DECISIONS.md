@@ -295,7 +295,15 @@ at the bottom of each section.
 - **New items open in the panel.** `+ Note` and a double-click on the empty
   board create a note there; `+ Task` asks only for a title. Both open the
   panel to carry on. Text fields save on blur or Enter (Ctrl/Cmd+Enter in
-  multi-line fields).
+  multi-line fields). A draft still unsaved when the panel goes away (Back
+  on a phone closes it without a blur) is saved then; a failure shows the
+  usual toast.
+- **Due dates save when whole.** The date input reports every keystroke,
+  including half-typed years ("0002-10-20") and "" while a part is empty,
+  so the due date is a draft like the text fields: saved on blur or Enter,
+  only when it is a real date from 1900 on (else the field says why and
+  nothing is sent), and never rolled back under the cursor. An emptied
+  field or Clear removes the date.
 - **Wording.** People's names are plain bold text; Claude's work carries a
   purple "Claude (via …)" badge. An item's own history says "this task";
   conflicts list the later changes and the fields they touched.

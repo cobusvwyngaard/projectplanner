@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { borderPoint, boardEdges, boardNodes, centreOf, mergeEdges, mergeNodes, nodeItem, roundPosition, type BoardNode } from "../../src/app/lib/board";
-import { asNote, asTask, itemKey, linksOf, parseItemKey, rebuildRow, searchItems } from "../../src/app/lib/items";
+import { asNote, asTask, dueDateProblem, itemKey, linksOf, parseItemKey, rebuildRow, searchItems } from "../../src/app/lib/items";
 import { event, link, note, task } from "./app-fixtures";
 
 describe("boardNodes and boardEdges", () => {
@@ -104,6 +104,21 @@ describe("items", () => {
     expect(row).toMatchObject({ id: "T1", title: "Second", archived_at: "2026-10-14T10:00:00.000Z", prov: null });
     expect(asNote(rebuildRow({ type: "task", id: "T1" }, events))).toBeNull();
     expect(rebuildRow({ type: "task", id: "T9" }, events)).toBeNull();
+  });
+});
+
+describe("dueDateProblem", () => {
+  it("accepts a whole date from 1900 on, and an emptied field (clear)", () => {
+    expect(dueDateProblem("2027-10-20", false)).toBeNull();
+    expect(dueDateProblem("1900-01-01", false)).toBeNull();
+    expect(dueDateProblem("", false)).toBeNull();
+  });
+
+  it("refuses half-typed years and dates with an empty part", () => {
+    expect(dueDateProblem("0002-10-20", false)).toMatch(/year from 1900/);
+    expect(dueDateProblem("0202-10-20", false)).toMatch(/year from 1900/);
+    expect(dueDateProblem("2026-02-30", false)).toMatch(/whole date/);
+    expect(dueDateProblem("", true)).toMatch(/finish the day, month and year/);
   });
 });
 

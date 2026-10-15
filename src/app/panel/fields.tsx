@@ -1,10 +1,11 @@
 // Editors for the item panel. Text fields keep a local draft and save on
 // blur or Enter; a failed save keeps the draft so no typing is lost.
 
-import { useId, useMemo, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, type KeyboardEvent } from "react";
 import type { Id, Label } from "../../shared/types";
 import { LabelChip } from "../components/ui";
 import { useDraft } from "../hooks";
+import { dueDateProblem } from "../lib/items";
 import { usePlanner } from "../store";
 
 export function TextField({
@@ -130,31 +131,73 @@ export function AssigneePicker({ value, onChange, disabled = false }: { value: I
   );
 }
 
-export function DueDateField({ value, onChange, disabled = false }: { value: string | null; onChange: (date: string | null) => void; disabled?: boolean }) {
+/**
+ * The native date input reports every keystroke as a value: half-typed years
+ * ("0002-10-20") and "" while a part is empty. So the date is a draft, saved
+ * when the field is left or Enter is pressed, and only when it is whole and
+ * from 1900 on; Clear clears at once.
+ */
+export function DueDateField({
+  value,
+  onSave,
+  disabled = false,
+}: {
+  value: string | null;
+  onSave: (date: string | null) => Promise<boolean>;
+  disabled?: boolean;
+}) {
   const id = useId();
+  const incomplete = useRef(false);
+  const field = useDraft(
+    value ?? "",
+    (next) => onSave(next === "" ? null : next),
+    (next) => dueDateProblem(next, incomplete.current),
+  );
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>
         Due date
+        {field.saving && <span className="field-status">Saving…</span>}
       </label>
       <div className="inline-row">
         <input
           id={id}
           className="input input--date"
           type="date"
-          value={value ?? ""}
+          value={field.draft}
           disabled={disabled}
           onChange={(e) => {
-            const next = e.target.value;
-            if (next === "" || /^\d{4}-\d{2}-\d{2}$/.test(next)) onChange(next === "" ? null : next);
+            incomplete.current = e.target.validity.badInput;
+            field.change(e.target.value);
           }}
+          onBlur={() => void field.commit()}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            void field.commit();
+          }}
+          aria-invalid={field.error ? true : undefined}
+          aria-describedby={field.error ? `${id}-error` : undefined}
         />
         {value !== null && (
-          <button type="button" className="button button--quiet" disabled={disabled} onClick={() => onChange(null)}>
+          <button
+            type="button"
+            className="button button--quiet"
+            disabled={disabled}
+            onClick={() => {
+              field.cancel();
+              void onSave(null);
+            }}
+          >
             Clear
           </button>
         )}
       </div>
+      {field.error && (
+        <p className="field-error" id={`${id}-error`} role="alert">
+          {field.error}
+        </p>
+      )}
     </div>
   );
 }

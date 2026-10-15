@@ -7,6 +7,7 @@ import {
   putRow,
   rolledToday,
   rowKey,
+  settleChange,
 } from "../../src/app/lib/state";
 import { ME, OTHER, bootstrap, changes, event, label, link, note, task } from "./app-fixtures";
 
@@ -131,6 +132,13 @@ describe("applyMutation", () => {
     expect(noop.seen.get(rowKey("task", "T1"))).toBe(30);
   });
 
+  it("leaves a row that a later change of ours already moved past", () => {
+    let state = fromBootstrap(bootstrap({ notes: [note({ id: "N1" })] }));
+    state = applyMutation(state, "note", { row: note({ id: "N1", x: 200, title: "Second" }), event: event({ seq: 41 }) });
+    const older = applyMutation(state, "note", { row: note({ id: "N1", x: 100 }), event: event({ seq: 40 }) });
+    expect(older).toBe(state);
+  });
+
   it("removes an archived row", () => {
     const state = fromBootstrap(bootstrap({ tasks: [task({ id: "T1" })] }));
     const next = applyMutation(state, "task", {
@@ -138,6 +146,61 @@ describe("applyMutation", () => {
       event: event({ seq: 31, action: "archive" }),
     });
     expect(next.tasks.has("T1")).toBe(false);
+  });
+});
+
+describe("settleChange", () => {
+  const key = rowKey("note", "N1");
+  /** N1 with a change of ours in flight (moved to x 100) and a poll that brought `polled`. */
+  function inFlight(polled: ReturnType<typeof note>, reach: number, changesInFlight = 1) {
+    let state = fromBootstrap(bootstrap({ notes: [note({ id: "N1", title: "Old" })] }));
+    for (let i = 0; i < changesInFlight; i++) state = markPending(state, key, 1);
+    state = putRow(state, "note", note({ id: "N1", title: "Old", x: 100 }));
+    return applyChanges(state, changes({ events: [event({ seq: reach })], notes: [polled], cursor: `E${reach}` }));
+  }
+
+  it("holds a row the feed skipped and applies it when it is newer than our answer", () => {
+    const state = inFlight(note({ id: "N1", title: "New", x: 100 }), 12);
+    expect(state.notes.get("N1")?.title).toBe("Old");
+    expect(state.held.get(key)).toMatchObject({ kind: "note", reach: 12 });
+    const next = settleChange(state, "note", "N1", { row: note({ id: "N1", title: "Old", x: 100 }), event: event({ seq: 11 }) }, undefined);
+    expect(next.notes.get("N1")).toMatchObject({ title: "New", x: 100 });
+    expect(next.held.size).toBe(0);
+    expect(next.pending.size).toBe(0);
+    expect(next.seen.has(key)).toBe(false);
+  });
+
+  it("keeps our answer when our change committed after the held poll", () => {
+    const state = inFlight(note({ id: "N1", title: "New" }), 11);
+    const next = settleChange(
+      state, "note", "N1", { row: note({ id: "N1", title: "New", x: 100 }), event: event({ seq: 12 }) }, undefined,
+    );
+    expect(next.notes.get("N1")).toMatchObject({ title: "New", x: 100 });
+    expect(next.held.size).toBe(0);
+    expect(next.seen.get(key)).toBe(12);
+  });
+
+  it("restores the held row, not the row from before, when the change fails", () => {
+    const state = inFlight(note({ id: "N1", title: "New" }), 11);
+    const next = settleChange(state, "note", "N1", null, note({ id: "N1", title: "Old" }));
+    expect(next.notes.get("N1")).toMatchObject({ title: "New", x: 0 });
+    expect(next.held.size).toBe(0);
+  });
+
+  it("restores the row from before when nothing was held", () => {
+    let state = fromBootstrap(bootstrap({ notes: [note({ id: "N1", title: "Old" })] }));
+    state = putRow(markPending(state, key, 1), "note", note({ id: "N1", title: "Old", x: 100 }));
+    const next = settleChange(state, "note", "N1", null, note({ id: "N1", title: "Old" }));
+    expect(next.notes.get("N1")?.x).toBe(0);
+  });
+
+  it("keeps holding the row while another change of ours to it is in flight", () => {
+    const state = inFlight(note({ id: "N1", title: "New", x: 100 }), 12, 2);
+    const first = settleChange(state, "note", "N1", { row: note({ id: "N1", title: "Old", x: 100 }), event: event({ seq: 11 }) }, undefined);
+    expect(first.held.has(key)).toBe(true);
+    expect(first.notes.get("N1")?.title).toBe("Old");
+    const second = settleChange(first, "note", "N1", { row: note({ id: "N1", title: "Old", x: 100 }), event: null }, undefined);
+    expect(second.notes.get("N1")?.title).toBe("New");
   });
 });
 

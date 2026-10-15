@@ -14,6 +14,7 @@ import {
   putRow,
   rolledToday,
   rowKey,
+  settleChange,
   type PlannerState,
   type RowKind,
   type RowTypes,
@@ -230,9 +231,9 @@ export class PlannerStore {
 
   /**
    * Make a change to an existing row. `optimistic` fields show at once; the
-   * change feed leaves the row alone until the request is answered. On
-   * failure the row is put back and the error is rethrown for the caller to
-   * report.
+   * change feed holds the row back until the request is answered. On failure
+   * the row is put back (or replaced by a newer one the feed held back) and
+   * the error is rethrown for the caller to report.
    */
   async change<K extends RowKind>(
     kind: K,
@@ -248,13 +249,10 @@ export class PlannerStore {
     });
     try {
       const response = await call();
-      this.update((s) => applyMutation(markPending(s, key, -1), kind, response));
+      this.update((s) => settleChange(s, kind, id, response, undefined));
       return response.row;
     } catch (err) {
-      this.update((s) => {
-        const unmarked = markPending(s, key, -1);
-        return optimistic && before ? putRow(unmarked, kind, before) : unmarked;
-      });
+      this.update((s) => settleChange(s, kind, id, null, optimistic ? before : undefined));
       this.pollNow();
       throw err;
     }

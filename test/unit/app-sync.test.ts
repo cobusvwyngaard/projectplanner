@@ -246,6 +246,40 @@ describe("PlannerStore changes", () => {
     expect(t.store.getState()?.pending.size).toBe(0);
   });
 
+  it("keeps a newer row the feed held back while the change was in flight", async () => {
+    const t = setup(bootstrap({ notes: [note({ id: "N1", title: "Old" })] }));
+    await t.store.start();
+    const answer = deferred<MutationResponse<NoteView>>();
+    const done = t.store.change("note", "N1", { x: 100 }, () => answer.promise);
+    // Our move commits at seq 11, the other person's rename at 12, and a poll
+    // brings both while our request is still waiting for its answer.
+    t.store.pollNow();
+    t.answers[0]?.resolve(changes({
+      events: [event({ seq: 11 }), event({ seq: 12, actor_user_id: "OTHER" })],
+      notes: [note({ id: "N1", x: 100, title: "New" })],
+      cursor: "E12",
+    }));
+    await settle();
+    expect(t.store.getState()?.notes.get("N1")).toMatchObject({ x: 100, title: "Old" });
+    answer.resolve({ row: note({ id: "N1", x: 100, title: "Old" }), event: event({ seq: 11 }) });
+    await done;
+    expect(t.store.getState()?.notes.get("N1")).toMatchObject({ x: 100, title: "New" });
+  });
+
+  it("restores the newest row the feed held back when the change fails", async () => {
+    const t = setup(bootstrap({ notes: [note({ id: "N1", title: "Old" })] }));
+    await t.store.start();
+    const answer = deferred<MutationResponse<NoteView>>();
+    const done = t.store.change("note", "N1", { x: 100 }, () => answer.promise);
+    t.store.pollNow();
+    t.answers[0]?.resolve(changes({ events: [event({ seq: 11 })], notes: [note({ id: "N1", title: "New" })], cursor: "E11" }));
+    await settle();
+    const failure = new ApiError(409, "conflict", "Someone else changed this at the same moment.");
+    answer.reject(failure);
+    await expect(done).rejects.toBe(failure);
+    expect(t.store.getState()?.notes.get("N1")).toMatchObject({ x: 0, title: "New" });
+  });
+
   it("puts the row back and rethrows when the change fails", async () => {
     const t = setup(bootstrap({ notes: [note({ id: "N1", x: 0, y: 0 })] }));
     await t.store.start();

@@ -214,10 +214,13 @@ at the bottom of each section.
 
 - **One store, optimistic changes.** `PlannerStore` (`lib/sync.ts`) holds the
   bootstrap state. A change shows at once; while its request is in flight
-  the change feed leaves that row alone, and a row our own change already
-  moved past is not rolled back by an older poll (`seen` seqs). On failure
-  the row is put back, a toast explains, and whatever was typed stays in
-  its field.
+  the change feed holds that row back (`held`, with the poll's highest seq),
+  and a row our own change already moved past is not rolled back by an older
+  poll or an older answer of ours (`seen` seqs). When the request settles,
+  the held row wins unless our change committed after that poll, since later
+  polls start past it and would never bring it again. On failure the held
+  row, or else the row as it was, is put back, a toast explains, and
+  whatever was typed stays in its field.
 - **Polling.** Every 5 s while the tab is visible, once on focus or when it
   becomes visible, never two at once, `more` polls again at once, `reset`
   reloads the bootstrap. Network errors back off (10 s doubling to 60 s)

@@ -120,6 +120,10 @@ describe("describeUserAgent", () => {
         "Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36",
         "Samsung Internet on Android",
       ],
+      [
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+        "Chrome on Linux",
+      ],
     ];
     for (const [ua, expected] of cases) expect(describeUserAgent(ua)).toBe(expected);
   });

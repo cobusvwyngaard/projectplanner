@@ -78,7 +78,7 @@ function browserName(ua: string): string | null {
   if (/\bOPR\/|\bOpera\b/.test(ua)) return "Opera";
   if (/\bSamsungBrowser\//.test(ua)) return "Samsung Internet";
   if (/\bFirefox\/|\bFxiOS\//.test(ua)) return "Firefox";
-  if (/\bChrome\/|\bCriOS\/|\bChromium\//.test(ua)) return "Chrome";
+  if (/\b(?:Headless)?Chrome\/|\bCriOS\/|\bChromium\//.test(ua)) return "Chrome";
   if (/\bSafari\//.test(ua)) return "Safari";
   return null;
 }

@@ -1965,9 +1965,11 @@ fieldset:disabled .chip-option {
     flex: 0 1 65%;
   }
 
+  /* minmax(0, …) and min-width: 0 let the date inputs shrink to half the
+     card; a plain 1fr track grows to the inputs' own minimum width. */
   .date-range {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
@@ -1975,11 +1977,13 @@ fieldset:disabled .chip-option {
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
+    min-width: 0;
   }
 
   .date-range .inline-label .input {
     flex: none;
     width: 100%;
+    min-width: 0;
   }
 
   .filters > * {

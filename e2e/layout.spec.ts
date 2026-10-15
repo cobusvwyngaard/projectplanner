@@ -1,4 +1,5 @@
-// Layout checks: who last changed a task stays readable on its card.
+// Layout checks: who last changed a task stays readable on its card, and the
+// Activity view's date filters fit a phone screen.
 
 import { expect, test, type Locator } from "@playwright/test";
 import type { MutationResponse } from "../src/shared/api";
@@ -27,4 +28,25 @@ test("a task card shows who last changed it in full", async ({ browser }) => {
   }
   await one.context.close();
   await two.context.close();
+});
+
+test("the Activity date filters fit a 390 px phone", async ({ browser }) => {
+  const { context, page } = await signedInPage(browser, 2, {
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  await page.goto("/activity");
+  const filters = page.getByRole("group", { name: "Filters" });
+  await expect(filters).toBeVisible();
+  const card = await filters.boundingBox();
+  if (!card) throw new Error("No filters.");
+  for (const name of ["From", "To"]) {
+    const box = await page.getByLabel(name, { exact: true }).boundingBox();
+    if (!box) throw new Error(`No ${name} field.`);
+    expect(box.x, name).toBeGreaterThanOrEqual(card.x);
+    expect(box.x + box.width, name).toBeLessThanOrEqual(card.x + card.width);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await context.close();
 });

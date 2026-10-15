@@ -2,7 +2,8 @@
 
 A private two-person project planner on one Cloudflare Worker (D1, R2 and a
 Durable Object for the Claude connector). SPEC.md says what it does,
-docs/architecture.md where things live and DECISIONS.md why.
+docs/architecture.md where things live and DECISIONS.md why. SETUP.md covers
+deploying, the login phrases and signing in.
 
 ```
 npm ci

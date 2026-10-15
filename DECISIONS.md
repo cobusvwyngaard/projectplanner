@@ -21,6 +21,13 @@ at the bottom of each section.
 - **Builds run through wrangler.** `wrangler.jsonc` has a `build` command
   (`npm run build:client`) so `npx wrangler deploy` (the Cloudflare Git
   integration's default) always builds the SPA first.
+- **`npm run deploy` migrates first, except on the first deploy.**
+  `scripts/deploy.sh` applies the D1 migrations and then deploys, so new code
+  never runs against an old schema. `wrangler d1 migrations apply` cannot
+  create the database, though, and `wrangler deploy` can; when the migrations
+  report "Couldn't find a D1 DB" the script deploys first and migrates
+  straight after. Any other migration failure stops the deploy. SETUP.md
+  describes the steps.
 - **TypeScript 7 and Vitest 4** with `@cloudflare/vitest-plugin`, the
   renamed successor of `@cloudflare/vitest-pool-workers`, so tests run inside
   workerd against real D1, R2 and Durable Objects.

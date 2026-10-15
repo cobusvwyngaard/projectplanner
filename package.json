@@ -35,7 +35,7 @@
     "check": "npm run typecheck && npm test && npm run build",
     "types": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
+    "deploy": "sh scripts/deploy.sh"
   },
   "engines": {
     "node": ">=20"

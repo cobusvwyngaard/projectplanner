@@ -180,7 +180,7 @@
   opacity: 0.85;
 }
 
-/* --- Task cards (220 px wide, as board/placement.ts assumes) ---------- */
+/* --- Task cards (220 px wide, as shared/placement.ts assumes) --------- */
 
 .task-card {
   position: relative;

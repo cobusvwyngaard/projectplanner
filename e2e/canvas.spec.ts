@@ -102,3 +102,22 @@ test("a task in the tray is placed by dragging it onto the board", async ({ page
   expect(placed).toHaveLength(1);
   expect(placed[0]?.before).toEqual({ x: null, y: null });
 });
+
+test("+ Note twice in a row puts the second note beside the first, not on top of it", async ({ page }) => {
+  const titles = [unique("First idea"), unique("Second idea")];
+  for (const title of titles) {
+    await page.getByRole("button", { name: "Note", exact: true }).click();
+    const panel = page.locator(".panel");
+    await expect(panel.getByRole("heading", { name: "Note" })).toBeVisible();
+    await panel.getByLabel("Title").fill(title);
+    await panel.getByLabel("Title").press("Enter");
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  }
+  const { notes } = await api<{ notes: NoteView[] }>(page, "GET", "/api/bootstrap");
+  const [a, b] = titles.map((title) => notes.find((n) => n.title === title));
+  if (!a || !b) throw new Error("The notes were not saved.");
+  const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+  expect(apart).toBe(true);
+  for (const title of titles) await expect(page.locator(".react-flow__node-note").filter({ hasText: title })).toBeVisible();
+});

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { MutationResponse } from "../../src/shared/api";
 import type { Label, Link, NoteView, TaskView } from "../../src/shared/types";
-import { GAP } from "../../src/worker/board/placement";
+import { GAP } from "../../src/shared/placement";
 import { asUser, fails, ok, type TestApi } from "../helpers/api";
 import { USER_1, USER_2, allEvents, eventsFor, freshDb } from "../helpers/db";
 

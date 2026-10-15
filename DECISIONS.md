@@ -281,8 +281,14 @@ at the bottom of each section.
   above the cards with its Unlink button. Delete and Backspace never remove
   cards; they only unlink selected links.
 - **Task cards are 220 px wide and about 100 px high** (one-line meta and
-  provenance, titles clamped to two lines), matching `board/placement.ts`.
+  provenance, titles clamped to two lines), matching `shared/placement.ts`.
   A task dropped from the tray is centred on the pointer.
+- **New cards from the toolbar or the tray keep clear of others.** + Note,
+  + Task and the tray's Place put the card at the free spot nearest the
+  middle of the view (`nearestFreeSpot` in `shared/placement.ts`, the same
+  40 px clearance as the Worker's placement), so cards added one after
+  another never hide each other. A double-click or a drop goes exactly
+  where the pointer is.
 - **New items open in the panel.** `+ Note` and a double-click on the empty
   board create a note there; `+ Task` asks only for a title. Both open the
   panel to carry on. Text fields save on blur or Enter (Ctrl/Cmd+Enter in

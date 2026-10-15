@@ -138,7 +138,10 @@ A note created without `x`/`y` (the list's quick-add, and Claude's
 (`src/worker/board/placement.ts`): 6 columns and 40 rows of cells the size of
 the note, 40 px apart, clear of every open note and placed task. A placed
 task counts as 220 × 100, the size of its card on the canvas. When the grid
-is full the note goes below everything.
+is full the note goes below everything. The card sizes, the 40 px clearance
+and `nearestFreeSpot` live in `src/shared/placement.ts`; the app uses the
+latter to put cards added from the toolbar or the tray beside, not on top
+of, the cards in the middle of the view.
 
 ## Provenance
 

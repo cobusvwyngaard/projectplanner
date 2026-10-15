@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { localDayStart } from "../../src/worker/board/activity";
-import { DEFAULT_NOTE_SIZE, GAP, freeSpot, placeNote } from "../../src/worker/board/placement";
+import { GAP } from "../../src/shared/placement";
+import { DEFAULT_NOTE_SIZE, freeSpot, placeNote } from "../../src/worker/board/placement";
 import { chunk, placeholders } from "../../src/worker/board/queries";
 import { captureTitle, excerpt, noteTitle, titlesFor } from "../../src/worker/board/titles";
 import { humanActor } from "../../src/worker/mutate/actor";

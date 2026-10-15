@@ -30,7 +30,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { NEW_NOTE, createNote, createTask, linkItems, moveItems, placeTask, unlink } from "../actions";
 import { FitIcon, PlusIcon, TrayIcon } from "../components/icons";
 import { isBoolean, useIsPhone, useStoredState } from "../hooks";
-import { TASK_CARD_WIDTH, boardEdges, boardNodes, mergeEdges, mergeNodes, nodeItem, type BoardNode, type LinkEdge } from "../lib/board";
+import { nearestFreeSpot, occupiedBoxes, TASK_CARD } from "../../shared/placement";
+import { boardEdges, boardNodes, mergeEdges, mergeNodes, nodeItem, type BoardNode, type LinkEdge } from "../lib/board";
 import { parseItemKey } from "../lib/items";
 import { openItem } from "../router";
 import { usePlanner } from "../store";
@@ -47,6 +48,10 @@ const FIT = { padding: 0.2, maxZoom: 1 } as const;
 /** On a phone, fitting never zooms out so far that cards cannot be read. */
 const FIT_PHONE = { padding: 0.1, maxZoom: 1, minZoom: 0.5 } as const;
 const notToItself = (c: Connection | LinkEdge) => c.source !== c.target;
+
+/** Top-left corners of a new note or a task card centred on a point. */
+const noteCorner = (centre: XYPosition): XYPosition => ({ x: Math.round(centre.x - NEW_NOTE.w / 2), y: Math.round(centre.y - NEW_NOTE.h / 2) });
+const taskCorner = (centre: XYPosition): XYPosition => ({ x: Math.round(centre.x - TASK_CARD.w / 2), y: Math.round(centre.y - 30) });
 
 /** What screen readers hear on the canvas, in the planner's words. */
 const ARIA_LABELS: Partial<AriaLabelConfig> = {
@@ -157,18 +162,25 @@ function Board() {
     return flow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
   }, [flow]);
 
-  const addNoteAt = useCallback(async (centre: XYPosition) => {
-    const note = await createNote({ x: Math.round(centre.x - NEW_NOTE.w / 2), y: Math.round(centre.y - NEW_NOTE.h / 2) });
-    if (note) openItem({ type: "note", id: note.id });
-  }, []);
+  /**
+   * The free spot nearest to the middle of the view for a new card, so cards
+   * added one after another from the toolbar or the tray never hide each
+   * other. A double-click or a drop goes exactly where the pointer is.
+   */
+  const clearSpotInView = useCallback(
+    (corner: (centre: XYPosition) => XYPosition, size: { w: number; h: number }): XYPosition =>
+      nearestFreeSpot({ ...corner(viewCentre()), ...size }, occupiedBoxes(notes.values(), tasks.values())),
+    [viewCentre, notes, tasks],
+  );
 
-  const placeAt = useCallback((taskId: string, centre: XYPosition) => {
-    void placeTask(taskId, { x: centre.x - TASK_CARD_WIDTH / 2, y: centre.y - 30 });
+  const addNote = useCallback(async (corner: XYPosition) => {
+    const note = await createNote(corner);
+    if (note) openItem({ type: "note", id: note.id });
   }, []);
 
   const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!(e.target instanceof Element) || !e.target.classList.contains("react-flow__pane")) return;
-    void addNoteAt(flow.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+    void addNote(noteCorner(flow.screenToFlowPosition({ x: e.clientX, y: e.clientY })));
   };
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -181,7 +193,7 @@ function Board() {
     const taskId = e.dataTransfer.getData(TRAY_MIME);
     if (!taskId) return;
     e.preventDefault();
-    placeAt(taskId, flow.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+    void placeTask(taskId, taskCorner(flow.screenToFlowPosition({ x: e.clientX, y: e.clientY })));
   };
 
   // Enter on a focused card opens it, like a click.
@@ -226,15 +238,14 @@ function Board() {
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} />
           <Controls showFitView={false} showInteractive={false} position="bottom-left" />
           <Panel position="top-left" className="board-toolbar">
-            <button type="button" className="button" onClick={() => void addNoteAt(viewCentre())}>
+            <button type="button" className="button" onClick={() => void addNote(clearSpotInView(noteCorner, NEW_NOTE))}>
               <PlusIcon /> Note
             </button>
             {addingTask ? (
               <NewTaskForm
                 onDone={() => setAddingTask(false)}
                 onCreate={async (title) => {
-                  const centre = viewCentre();
-                  const task = await createTask({ title, x: Math.round(centre.x - TASK_CARD_WIDTH / 2), y: Math.round(centre.y - 30) });
+                  const task = await createTask({ title, ...clearSpotInView(taskCorner, TASK_CARD) });
                   if (task) openItem({ type: "task", id: task.id });
                   return task !== undefined;
                 }}
@@ -260,7 +271,7 @@ function Board() {
           )}
         </ReactFlow>
       </div>
-      {trayOpen && <Tray onClose={() => setTrayOpen(false)} onPlace={(id) => placeAt(id, viewCentre())} />}
+      {trayOpen && <Tray onClose={() => setTrayOpen(false)} onPlace={(id) => void placeTask(id, clearSpotInView(taskCorner, TASK_CARD))} />}
     </div>
   );
 }

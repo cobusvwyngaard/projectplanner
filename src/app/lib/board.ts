@@ -18,9 +18,6 @@ export interface LinkEdgeData extends Record<string, unknown> {
 }
 export type LinkEdge = Edge<LinkEdgeData, "link">;
 
-/** Width of a task card; tasks have no stored size (matches the Worker's placement). */
-export const TASK_CARD_WIDTH = 220;
-
 /** Node ids are item keys ("note:<id>"), so links map straight onto edges. */
 export function boardNodes(notes: Iterable<NoteView>, tasks: Iterable<TaskView>): BoardNode[] {
   const nodes: BoardNode[] = [];

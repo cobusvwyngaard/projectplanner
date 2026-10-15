@@ -37,6 +37,7 @@ describe("create", () => {
       before: null,
     });
     expect(event?.after).toMatchObject({ title: "Plan the trip", body: "", x: 10, y: 20 });
+    expect(event?.after).not.toHaveProperty("updated_at");
     expect(event?.seq).toBeGreaterThan(0);
     expect(await allEvents()).toHaveLength(1);
   });

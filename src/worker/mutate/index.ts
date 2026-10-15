@@ -462,10 +462,11 @@ function runGuard(db: D1Database, actor: Actor, now: Date): D1PreparedStatement 
     .bind(actor.runId, actor.userId, iso(addMs(now, -RUN_MAX_AGE_MS)));
 }
 
+/** Event JSON never carries hidden columns or the touch column (updated_at). */
 function visible(spec: EntitySpec, row: Row): Row {
   const out: Row = {};
   for (const [field, value] of Object.entries(row)) {
-    if (spec.hidden.includes(field)) continue;
+    if (spec.hidden.includes(field) || field === spec.touch) continue;
     out[field] = value;
   }
   return out;

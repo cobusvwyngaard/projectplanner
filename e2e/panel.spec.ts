@@ -1,5 +1,5 @@
-// The item panel: a due date typed with the keyboard, and closing the panel
-// with Back.
+// The item panel: a due date typed with the keyboard, closing the panel with
+// Back, and where focus goes when it closes.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { MutationResponse } from "../src/shared/api";
@@ -141,4 +141,34 @@ test("Back on a phone saves what was typed before the panel closes", async ({ br
   await expect(panel(page)).toHaveCount(0);
   await expect.poll(async () => (await current(page, task.id))?.detail).toBe(text);
   await context.close();
+});
+
+test.describe("closing the panel", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page, 1);
+  });
+
+  test("returns focus to the list row that opened it", async ({ page }) => {
+    const task = await newTask(page, { assignee_id: "00000000000000000000000001" });
+    await page.goto("/list");
+    const opener = page.getByRole("button", { name: task.title });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    await expect(panel(page).getByRole("heading", { name: "Task" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(panel(page)).toHaveCount(0);
+    await expect(opener).toBeFocused();
+  });
+
+  test("returns focus to the card that opened it on the board", async ({ page }) => {
+    const task = await newTask(page, { x: 40, y: 40 });
+    await page.goto("/board");
+    const card = page.locator(`.react-flow__node[data-id="task:${task.id}"]`);
+    await card.focus();
+    await page.keyboard.press("Enter");
+    await expect(panel(page).getByRole("heading", { name: "Task" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(panel(page)).toHaveCount(0);
+    await expect(card).toBeFocused();
+  });
 });

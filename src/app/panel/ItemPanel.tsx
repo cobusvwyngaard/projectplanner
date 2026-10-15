@@ -22,17 +22,32 @@ import { LinksSection } from "./LinksSection";
 export function ItemPanel({ itemKey: key }: { itemKey: string }) {
   const item = useMemo(() => parseItemKey(key), [key]);
   return (
-    <PanelFrame title={item?.type === "task" ? "Task" : item?.type === "note" ? "Note" : "Not found"}>
+    <PanelFrame itemKey={key} title={item?.type === "task" ? "Task" : item?.type === "note" ? "Note" : "Not found"}>
       {item ? <ItemDetails item={item} /> : <p>This link does not point to a note or a task.</p>}
     </PanelFrame>
   );
 }
 
-function PanelFrame({ title, children }: { title: string; children: ReactNode }) {
+function PanelFrame({ itemKey, title, children }: { itemKey: string; title: string; children: ReactNode }) {
   const phone = useIsPhone();
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const frame = useRef<HTMLElement>(null);
+  // What had focus when the panel opened (read while rendering, before
+  // anything in the panel takes focus): the list row, card or button.
+  const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
+
+  // When the panel closes with focus inside it, focus falls to <body>; send
+  // it back to the opener, or to the item's card on the board if the opener
+  // has gone, so keyboard users carry on where they were.
+  useEffect(
+    () => () => {
+      if (document.activeElement !== null && document.activeElement !== document.body) return;
+      const card = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${itemKey}"]`);
+      (opener?.isConnected && opener !== document.body ? opener : card)?.focus();
+    },
+    [opener, itemKey],
+  );
 
   // Focus moves into the panel when it opens, unless a field already took it.
   useEffect(() => {

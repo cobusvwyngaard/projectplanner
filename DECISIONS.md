@@ -304,6 +304,10 @@ at the bottom of each section.
   only when it is a real date from 1900 on (else the field says why and
   nothing is sent), and never rolled back under the cursor. An emptied
   field or Clear removes the date.
+- **Focus goes back when the panel closes.** The panel remembers what had
+  focus when it opened (a list row, a card, a button) and returns focus
+  there when it closes with Escape, Close or Back; if that is gone, the
+  item's card on the board gets it.
 - **Wording.** People's names are plain bold text; Claude's work carries a
   purple "Claude (via …)" badge. An item's own history says "this task";
   conflicts list the later changes and the fields they touched.

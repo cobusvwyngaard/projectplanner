@@ -38,7 +38,7 @@ function isPublicFile(path: string): boolean {
 function cacheControl(path: string, status: number): string {
   // Vite puts a content hash in every file name under /assets/.
   if (path.startsWith("/assets/") && status === 200) return "public, max-age=31536000, immutable";
-  if (isPublicFile(path)) return "no-cache";
+  if (isPublicFile(path) && status < 400) return "no-cache";
   return "no-store";
 }
 

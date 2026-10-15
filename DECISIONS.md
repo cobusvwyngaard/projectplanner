@@ -136,6 +136,10 @@ at the bottom of each section.
   pages; `public, max-age=31536000, immutable` for 200s under `/assets/*`
   (still behind the session check); `no-cache` for the public files
   (`/manifest.webmanifest`, `/sw.js`, `/favicon.svg`, `/icons/*`).
+- **Missing public files are a 404.** The assets' single-page fallback
+  answers any missing path with `index.html`, so a public path whose answer
+  is HTML (none of those files is) becomes a 404 page instead of the app
+  shell without a session.
 - **https only.** A plain-http request on any host other than a loopback one
   gets a 308 to the same URL on https in `index.ts`, before the OAuth
   provider (which cannot be built for an http origin) or anything else runs.

@@ -24,8 +24,14 @@ app.use("*", securityHeaders);
 
 app.route("/", authRouter);
 
+// A missing public file is a 404. The assets' single-page fallback would
+// answer with index.html (200), and none of these files is HTML.
 for (const path of PUBLIC_FILES) {
-  app.on(["GET", "HEAD"], path, (c) => c.env.ASSETS.fetch(c.req.raw));
+  app.on(["GET", "HEAD"], path, async (c) => {
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    if (!(res.headers.get("Content-Type") ?? "").startsWith("text/html")) return res;
+    return c.html(renderMessagePage("Not found", "There is nothing at this address."), 404);
+  });
 }
 
 // The session check runs before any /api routing, so unknown paths and audio

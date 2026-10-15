@@ -18,7 +18,7 @@ request ─► plain http on a host other than localhost: 308 to the same URL on
             └─ everything else ─► Hono app (src/worker/app.ts)
                  ├─ /login (GET, POST), /logout (POST)      public
                  ├─ /manifest.webmanifest, /sw.js,
-                 │  /favicon.svg, /icons/*                  public, no data
+                 │  /favicon.svg, /icons/*                  public, no data; 404 when the file is missing
                  ├─ /authorize (GET, POST)                   redirect_uri must be allowed, else a 400 page;
                  │                                           session required, else redirect to /login?next=…
                  ├─ /api/sessions, /api/*                    session required, else 401 JSON

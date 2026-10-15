@@ -70,6 +70,14 @@ describe("without a session", () => {
     expect(icon.status).toBe(200);
     expectSecurityHeaders(icon);
   });
+
+  it("answers a public file that does not exist with a 404, never the app shell", async () => {
+    for (const path of ["/sw.js", "/icons/missing.png", "/icons/", "/icons"]) {
+      const res = await call(path);
+      expect(res.status, path).toBe(404);
+      expect(await res.text(), path).not.toContain("spa-shell");
+    }
+  });
 });
 
 describe("plain http", () => {

@@ -6,6 +6,7 @@
 
 import type {
   Capture,
+  EventAction,
   Id,
   ItemRef,
   Label,
@@ -231,3 +232,66 @@ export interface RunDetailResponse {
   captures: Capture[];
   titles: Record<string, string>;
 }
+
+// --- Captures and the inbox (phase 2) -------------------------------------
+
+/**
+ * POST /api/captures, multipart/form-data -> 201 MutationResponse<Capture>
+ *   kind = "text":          field "text" (1..20 000 characters)
+ *   kind = "voice" | "file": field "file" (audio, at most 50 MB) and optionally
+ *                           "duration_s" (seconds, as measured by the browser)
+ * Voice and file captures start with transcript_status "pending"; text
+ * captures with "n/a". All start in the inbox (inbox_status "new").
+ */
+export type CaptureKindField = "voice" | "file" | "text";
+
+/** Why transcription cannot work at the moment, for a banner in the Inbox. */
+export type TranscriptionProblem = "missing_key" | "bad_key" | null;
+
+/**
+ * GET /api/captures?status=new|claimed|processed|ignored|all&before=<created_at>&limit=
+ * Newest first; status defaults to "all"; limit 1..100, default 30.
+ */
+export interface CapturesResponse {
+  captures: Capture[];
+  /** Runs that claimed or processed the listed captures */
+  runs: Run[];
+  /** Pass as `before` for the next page; null at the end */
+  next: string | null;
+  transcription: { problem: TranscriptionProblem };
+}
+
+/** An item a run created or changed, listed under the capture it processed. */
+export interface CaptureItemRef {
+  type: "note" | "task" | "link";
+  id: Id;
+  title: string;
+  /** What the run did to it, oldest first */
+  actions: EventAction[];
+}
+
+/** GET /api/captures/:id */
+export interface CaptureDetailResponse {
+  capture: Capture;
+  /** The runs that claimed or processed it */
+  runs: Run[];
+  /** Items those runs created or changed, from their events */
+  items: CaptureItemRef[];
+  /** The capture's own events, oldest first */
+  events: PlannerEvent[];
+}
+
+/**
+ * PATCH /api/captures/:id -> MutationResponse<Capture>
+ * A transcript edit is a person's event on the capture (SPEC 6.2). People may
+ * move a capture between new, ignored and processed, but not while a Claude
+ * run has it claimed (409).
+ */
+export interface UpdateCaptureRequest {
+  text?: string;
+  inbox_status?: "new" | "ignored" | "processed";
+  processing_note?: string | null;
+}
+
+// POST /api/captures/:id/retry -> 202 { capture: Capture }   (voice/file captures that are pending or failed)
+// GET|HEAD /api/captures/:id/audio -> the audio, with Range support (206/416)

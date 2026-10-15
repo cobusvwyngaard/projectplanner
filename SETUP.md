@@ -40,9 +40,12 @@ and use these build settings:
 
 | Setting | Value |
 |---|---|
-| Build command | `npm run build` (optional: it checks that the app and the Worker build without deploying; the deploy builds again anyway) |
+| Production branch | the branch you deploy from (currently `claude/pensive-fermat-rqkh7b`) |
+| Build command | leave empty (the deploy builds the app itself) |
 | Deploy command | `npm run deploy` (migrations, then deploy) |
-| Root directory | the repository root |
+| Root directory | `/` |
+
+These are the settings under the Worker → Settings → Build. "Retry build" rebuilds the same commit; to deploy new code, push a commit to the production branch.
 
 **(unverified)** The Worker's name in the dashboard must be `projectplanner`,
 the `name` in `wrangler.jsonc`, and the build's API token needs permission to

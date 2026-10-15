@@ -15,6 +15,7 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
+  type AriaLabelConfig,
   type Connection,
   type EdgeChange,
   type EdgeTypes,
@@ -46,6 +47,18 @@ const FIT = { padding: 0.2, maxZoom: 1 } as const;
 /** On a phone, fitting never zooms out so far that cards cannot be read. */
 const FIT_PHONE = { padding: 0.1, maxZoom: 1, minZoom: 0.5 } as const;
 const notToItself = (c: Connection | LinkEdge) => c.source !== c.target;
+
+/** What screen readers hear on the canvas, in the planner's words. */
+const ARIA_LABELS: Partial<AriaLabelConfig> = {
+  "node.a11yDescription.default":
+    "Press Enter to open this card. Press Space to select it, then use the arrow keys to move it.",
+  "node.a11yDescription.ariaLiveMessage": ({ direction, x, y }) => `Moved the card ${direction}, to ${x}, ${y}.`,
+  "edge.a11yDescription.default": "Press Enter or Space to select this link, then Delete to unlink the two cards.",
+  "controls.ariaLabel": "Zoom",
+  "controls.zoomIn.ariaLabel": "Zoom in",
+  "controls.zoomOut.ariaLabel": "Zoom out",
+  "handle.ariaLabel": "Drag to another card to link them",
+};
 
 export default function BoardView() {
   return (
@@ -208,6 +221,7 @@ function Board() {
           onDrop={onDrop}
           onKeyDown={onKeyDown}
           aria-label="Board"
+          ariaLabelConfig={ARIA_LABELS}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} />
           <Controls showFitView={false} showInteractive={false} position="bottom-left" />

@@ -253,13 +253,20 @@
   color: var(--muted);
 }
 
-/* One line each, so a card stays close to the 220 × 100 the placement assumes. */
+/* Up to two lines, so who last changed a task (a person or Claude, and for
+   whom) always shows (SPEC 5). A second line makes the card about 115 px
+   high, still inside the 40 px gap the placement keeps around 220 × 100. */
 .task-card .provenance {
-  display: block;
-  line-height: 1.35;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
+.task-card .provenance .badge {
+  white-space: nowrap;
 }
 
 .task-card .initials {

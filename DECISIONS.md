@@ -280,9 +280,12 @@ at the bottom of each section.
   handles; the handles only start a new link, and a selected link is lifted
   above the cards with its Unlink button. Delete and Backspace never remove
   cards; they only unlink selected links.
-- **Task cards are 220 px wide and about 100 px high** (one-line meta and
-  provenance, titles clamped to two lines), matching `shared/placement.ts`.
-  A task dropped from the tray is centred on the pointer.
+- **Task cards are 220 px wide and about 100 px high** (one-line meta,
+  titles clamped to two lines), matching `shared/placement.ts`. The
+  provenance line may take a second line (about 115 px then, inside the
+  40 px gap placement keeps), so who last changed a task, a person or
+  Claude and for whom, is never cut off (SPEC 5). A task dropped from the
+  tray is centred on the pointer.
 - **New cards from the toolbar or the tray keep clear of others.** + Note,
   + Task and the tray's Place put the card at the free spot nearest the
   middle of the view (`nearestFreeSpot` in `shared/placement.ts`, the same

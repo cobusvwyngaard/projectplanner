@@ -44,5 +44,6 @@ is. `auth.spec.ts` checks the cookie's flags and lifetime.
 | `list.spec.ts` | The list tabs show the right tasks, inline tick-off moves a task to Done, quick-add in Theirs assigns to the other person; a phone-sized screen opens the list, a wide one the board |
 | `settings.spec.ts` | Labels are created (custom hex), renamed, recoloured (preset) and reordered; a person is renamed; keyterm prompting is switched and stays switched; Sign out this browser goes to the phrase page and ends the session |
 | `canvas.spec.ts` | Dragging a note records exactly one move (checked in the item's history), resizing exactly one size change, a task dragged in from the tray is placed, and + Note twice in a row does not stack the notes |
+| `layout.spec.ts` | Who last changed a task is shown in full on its card (wide and phone screens) |
 
 Results and traces of failures go to `test-results/` (git-ignored).

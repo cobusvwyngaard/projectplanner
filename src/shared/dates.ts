@@ -32,3 +32,36 @@ export function addDays(date: string, days: number): string {
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days));
   return d.toISOString().slice(0, 10);
 }
+
+function utcDay(date: string): number {
+  const m = DATE_RE.exec(date);
+  if (!m) throw new Error("Not a YYYY-MM-DD date");
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/** Whole days from `from` to `to` (negative when `to` is earlier). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((utcDay(to) - utcDay(from)) / 86_400_000);
+}
+
+/** How a due date relates to today: past, today, within two days, or later. */
+export type DueState = "overdue" | "today" | "soon" | "later";
+
+/** Days after today that still count as due soon. */
+export const DUE_SOON_DAYS = 2;
+
+/** null when there is no due date. */
+export function dueState(due: string | null, today: string): DueState | null {
+  if (due === null) return null;
+  if (due < today) return "overdue";
+  if (due === today) return "today";
+  return due <= addDays(today, DUE_SOON_DAYS) ? "soon" : "later";
+}
+
+/** The week, Monday to Sunday, that contains `today`. */
+export function weekBounds(today: string): { start: string; end: string } {
+  // getUTCDay counts from Sunday (0); the days since Monday are (day + 6) % 7.
+  const sinceMonday = (new Date(utcDay(today)).getUTCDay() + 6) % 7;
+  const start = addDays(today, -sinceMonday);
+  return { start, end: addDays(start, 6) };
+}

@@ -1,6 +1,6 @@
 // Notes and tasks as "items": references, titles, links between them, the
-// Link to… search, rebuilding an archived item from its history, and
-// checking a typed due date.
+// Link to… search, rebuilding an archived item from its history, who ticked
+// a task off, and checking a typed due date.
 
 import { isLocalDate } from "../../shared/dates";
 import { excerpt } from "../../shared/format";
@@ -103,6 +103,16 @@ export function asNote(row: Record<string, unknown> | null): NoteView | null {
 export function asTask(row: Record<string, unknown> | null): TaskView | null {
   if (!row || typeof row.id !== "string" || typeof row.title !== "string" || typeof row.status !== "string") return null;
   return { ...(row as unknown as TaskView), prov: null };
+}
+
+/**
+ * The event that ticked the task off as it stands: the first one of the task
+ * that set its current done_at (a revert that restores that time is not a
+ * new tick). Null while the task is open or the history is not loaded.
+ */
+export function completionEvent(task: Pick<TaskView, "id" | "done_at">, events: readonly PlannerEvent[]): PlannerEvent | null {
+  if (task.done_at === null) return null;
+  return events.find((e) => e.entity_type === "task" && e.entity_id === task.id && e.after?.done_at === task.done_at) ?? null;
 }
 
 /** Earliest year a typed due date may have (anything earlier is a typing slip). */

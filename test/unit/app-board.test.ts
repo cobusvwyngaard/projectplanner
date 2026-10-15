@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { borderPoint, boardEdges, boardNodes, centreOf, mergeEdges, mergeNodes, nodeItem, roundPosition, type BoardNode } from "../../src/app/lib/board";
-import { asNote, asTask, dueDateProblem, itemKey, linksOf, parseItemKey, rebuildRow, searchItems } from "../../src/app/lib/items";
-import { event, link, note, task } from "./app-fixtures";
+import { asNote, asTask, completionEvent, dueDateProblem, itemKey, linksOf, parseItemKey, rebuildRow, searchItems } from "../../src/app/lib/items";
+import { OTHER, event, link, note, task } from "./app-fixtures";
 
 describe("boardNodes and boardEdges", () => {
   it("places notes with their size and only placed tasks", () => {
@@ -104,6 +104,42 @@ describe("items", () => {
     expect(row).toMatchObject({ id: "T1", title: "Second", archived_at: "2026-10-14T10:00:00.000Z", prov: null });
     expect(asNote(rebuildRow({ type: "task", id: "T1" }, events))).toBeNull();
     expect(rebuildRow({ type: "task", id: "T9" }, events)).toBeNull();
+  });
+});
+
+describe("completionEvent", () => {
+  const DONE_AT = "2026-10-14T09:00:00.000Z";
+  const history = [
+    event({ seq: 1, entity_type: "task", entity_id: "T1", action: "create", after: { title: "T", status: "open" } }),
+    event({
+      seq: 2,
+      entity_type: "task",
+      entity_id: "T1",
+      action: "complete",
+      actor_kind: "claude",
+      actor_user_id: OTHER.id,
+      run_id: "R1",
+      after: { status: "done", done_at: DONE_AT, done_by_user_id: OTHER.id },
+    }),
+  ];
+
+  it("finds the event that ticked the task off, with its actor (Claude, not the person)", () => {
+    const found = completionEvent(task({ id: "T1", status: "done", done_at: DONE_AT, done_by_user_id: OTHER.id }), history);
+    expect(found).toMatchObject({ seq: 2, actor_kind: "claude", actor_user_id: OTHER.id });
+  });
+
+  it("keeps the original tick when a reopen is reverted", () => {
+    const reverted = [
+      ...history,
+      event({ seq: 3, entity_type: "task", entity_id: "T1", action: "reopen", after: { status: "open", done_at: null } }),
+      event({ seq: 4, entity_type: "task", entity_id: "T1", action: "revert", after: { status: "done", done_at: DONE_AT } }),
+    ];
+    expect(completionEvent(task({ id: "T1", status: "done", done_at: DONE_AT }), reverted)?.seq).toBe(2);
+  });
+
+  it("is null for an open task or before the history has loaded", () => {
+    expect(completionEvent(task({ id: "T1" }), history)).toBeNull();
+    expect(completionEvent(task({ id: "T1", status: "done", done_at: DONE_AT }), [])).toBeNull();
   });
 });
 

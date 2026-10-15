@@ -308,6 +308,9 @@ at the bottom of each section.
   focus when it opened (a list row, a card, a button) and returns focus
   there when it closes with Escape, Close or Back; if that is gone, the
   item's card on the board gets it.
+- **"Ticked off by" names the actor of the completion event**, through
+  `actorLabel`, so a task Claude ticked off reads "Claude (via …)" rather
+  than the person it acted for (`done_by_user_id` holds that person).
 - **Wording.** People's names are plain bold text; Claude's work carries a
   purple "Claude (via …)" badge. An item's own history says "this task";
   conflicts list the later changes and the fields they touched.

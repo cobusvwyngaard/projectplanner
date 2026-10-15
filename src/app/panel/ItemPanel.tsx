@@ -4,8 +4,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { HistoryResponse } from "../../shared/api";
-import { userName } from "../../shared/actors";
-import type { ItemRef, NoteView, TaskView } from "../../shared/types";
+import { actorLabel, eventActor } from "../../shared/actors";
+import type { ItemRef, NoteView, PlannerEvent, TaskView } from "../../shared/types";
 import { setArchived, setTaskDone, unplaceTask, updateNote, updateTask } from "../actions";
 import { api, errorMessage } from "../api";
 import { EventEntry } from "../components/events";
@@ -13,7 +13,7 @@ import { BackIcon, CloseIcon } from "../components/icons";
 import { ProvenanceLine, TimeAgo } from "../components/ui";
 import { useIsPhone } from "../hooks";
 import type { DescribeContext } from "../lib/events";
-import { asNote, asTask, linksOf, liveTitle, parseItemKey, rebuildRow } from "../lib/items";
+import { asNote, asTask, completionEvent, linksOf, liveTitle, parseItemKey, rebuildRow } from "../lib/items";
 import { closeItem } from "../router";
 import { usePlanner } from "../store";
 import { AssigneePicker, DueDateField, LabelPicker, TextField } from "./fields";
@@ -135,7 +135,7 @@ function ItemDetails({ item }: { item: ItemRef }) {
         </div>
       )}
       {item.type === "task" ? (
-        <TaskFields task={row as TaskView} disabled={archived} />
+        <TaskFields task={row as TaskView} events={history?.events ?? []} disabled={archived} />
       ) : (
         <NoteFields note={row as NoteView} disabled={archived} />
       )}
@@ -164,9 +164,11 @@ function ItemDetails({ item }: { item: ItemRef }) {
 
 const required = (what: string) => (value: string) => (value.trim() === "" ? `${what} needs a title.` : null);
 
-function TaskFields({ task, disabled }: { task: TaskView; disabled: boolean }) {
+function TaskFields({ task, events, disabled }: { task: TaskView; events: readonly PlannerEvent[]; disabled: boolean }) {
   const users = usePlanner((s) => s.users);
   const done = task.status === "done";
+  // Named from the event, so Claude's tick reads "Claude (via …)" (SPEC 5).
+  const ticked = completionEvent(task, events);
   return (
     <div className="fields">
       <label className="check-row">
@@ -175,7 +177,7 @@ function TaskFields({ task, disabled }: { task: TaskView; disabled: boolean }) {
           {done ? (
             <>
               Done
-              {task.done_by_user_id && <> · ticked off by {userName(task.done_by_user_id, users)}</>}
+              {ticked && <> · ticked off by {actorLabel(eventActor(ticked), users)}</>}
               {task.done_at && (
                 <>
                   {" "}

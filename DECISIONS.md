@@ -56,12 +56,19 @@ at the bottom of each section.
 - **Event diffs hold only changed fields**, except creations, whose `after`
   is the full row. `updated_at` and `captures.transcript_json` are never in
   event JSON.
+- **A position is one value.** When `x` or `y` of a note or task changes, the
+  change and its event carry both coordinates (before and after), so every
+  event, and every revert of one, restores a whole position. Reverting a
+  move along one axis after the task went to the tray works.
 
 ## Provenance and revert
 
 - **Reverting a creation archives the item** (nothing is ever deleted).
   Captures, users and settings cannot be archived, so their creation cannot
-  be reverted.
+  be reverted. An item that is already archived is left alone, as archiving
+  does: a revert never moves an existing `archived_at`, so reverting a
+  creation again, or a whole run after one of its creations was reverted,
+  writes no event for it and counts 0.
 - **Conflict rule.** A revert warns when a later event on the same item set
   any field the revert would set back; for a creation, any later change
   counts. A person's earlier revert of an event in the same run is not a

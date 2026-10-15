@@ -399,6 +399,11 @@ async function prepareChange(
       const fixed = new Set([spec.key, "created_at", spec.touch]);
       checkValues(m.patch, spec.columns.filter((c) => !fixed.has(c)), m.entity);
       wanted = { ...m.patch };
+      // Archiving by revert (undoing a creation or an unarchive) leaves an
+      // item that is already archived alone, as archiving does.
+      if (spec.archive && wanted[spec.archive] != null && before[spec.archive] !== null) {
+        delete wanted[spec.archive];
+      }
       revertsEventId = m.revertsEventId;
       break;
     }
@@ -416,6 +421,12 @@ async function prepareChange(
     const doneBy = done ? ctx.actor.userId : null;
     if (!same(before.done_at, doneAt)) changes.done_at = doneAt;
     if (!same(before.done_by_user_id, doneBy)) changes.done_by_user_id = doneBy;
+  }
+  // A position is one value: a move records both coordinates, so every event
+  // (and every revert of it) restores a whole position.
+  if ((m.entity === "note" || m.entity === "task") && ("x" in changes || "y" in changes)) {
+    if (!("x" in changes)) changes.x = before.x ?? null;
+    if (!("y" in changes)) changes.y = before.y ?? null;
   }
 
   if (Object.keys(changes).length === 0) {

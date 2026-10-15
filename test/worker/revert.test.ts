@@ -45,6 +45,29 @@ describe("revert one event", () => {
     expect(row?.archived_at).not.toBeNull();
   });
 
+  it("is a no-op when a creation is reverted again (the item stays archived as it was)", async () => {
+    const created = await mutate(db, human1, { entity: "task", action: "create", values: { title: "T" } });
+    const id = String(created.event?.id);
+    await revertEvent(db, human1, id, { now: new Date("2026-10-16T08:00:00.000Z") });
+    const again = await revertEvent(db, human1, id, { now: new Date("2026-10-16T09:00:00.000Z") });
+    expect(again.reverted).toBe(0);
+    const row = await db.prepare("SELECT archived_at FROM tasks WHERE id = ?").bind(created.id).first();
+    expect(row?.archived_at).toBe("2026-10-16T08:00:00.000Z");
+    expect(await eventsFor("task", created.id)).toHaveLength(2);
+  });
+
+  it("reverts a one-axis move after the task went to the tray", async () => {
+    const task = await mutate(db, human1, { entity: "task", action: "create", values: { title: "T", x: 100, y: 200 } });
+    const move = await mutate(db, human1, { entity: "task", action: "update", id: task.id, patch: { x: 100, y: 300 } });
+    await mutate(db, human2, { entity: "task", action: "update", id: task.id, patch: { x: null, y: null } });
+    const moveId = String(move.event?.id);
+    await expect(revertEvent(db, human1, moveId)).rejects.toBeInstanceOf(RevertConflictError);
+    const outcome = await revertEvent(db, human1, moveId, { confirm: true });
+    expect(outcome.reverted).toBe(1);
+    const row = await db.prepare("SELECT x, y FROM tasks WHERE id = ?").bind(task.id).first();
+    expect(row).toEqual({ x: 100, y: 200 });
+  });
+
   it("restores status and who ticked it off when a completion is reverted", async () => {
     const created = await mutate(db, human1, { entity: "task", action: "create", values: { title: "T" } });
     const done = await mutate(db, human2, { entity: "task", action: "complete", id: created.id });
@@ -151,6 +174,19 @@ describe("revert a whole run", () => {
     await revertEvent(db, human1, String(change.event?.id));
     const outcome = await revertRun(db, human1, runId);
     expect(outcome.reverted).toBe(0);
+  });
+
+  it("does not revert again a creation a person already reverted", async () => {
+    const runId = await openRun(USER_2);
+    const claude = claudeActor(USER_2, runId);
+    const task = await mutate(db, claude, { entity: "task", action: "create", values: { title: "Claude task" } });
+    await mutate(db, claude, { entity: "note", action: "create", values: { title: "Claude note" } });
+    await revertEvent(db, human1, String(task.event?.id), { now: new Date("2026-10-16T08:00:00.000Z") });
+    const outcome = await revertRun(db, human2, runId, { now: new Date("2026-10-16T09:00:00.000Z") });
+    expect(outcome.reverted).toBe(1);
+    const row = await db.prepare("SELECT archived_at FROM tasks WHERE id = ?").bind(task.id).first();
+    expect(row?.archived_at).toBe("2026-10-16T08:00:00.000Z");
+    expect((await eventsFor("task", task.id)).map((e) => e.actor_user_id)).toEqual([USER_2, USER_1]);
   });
 
   it("reports unknown runs", async () => {

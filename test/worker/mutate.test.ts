@@ -251,6 +251,26 @@ describe("Claude guardrails", () => {
   });
 });
 
+describe("positions", () => {
+  it("records both coordinates when a note or task moves along one axis", async () => {
+    const note = await newNote();
+    const moved = await mutate(db, human1, { entity: "note", action: "update", id: note.id, patch: { y: 99 } });
+    expect(moved.event?.before).toEqual({ x: 10, y: 20 });
+    expect(moved.event?.after).toEqual({ x: 10, y: 99 });
+
+    const task = await mutate(db, human1, { entity: "task", action: "create", values: { title: "T", x: 100, y: 200 } });
+    const nudged = await mutate(db, human1, { entity: "task", action: "update", id: task.id, patch: { x: 100, y: 300 } });
+    expect(nudged.event?.before).toEqual({ x: 100, y: 200 });
+    expect(nudged.event?.after).toEqual({ x: 100, y: 300 });
+  });
+
+  it("leaves the position out of changes that do not move the item", async () => {
+    const note = await newNote();
+    const resized = await mutate(db, human1, { entity: "note", action: "update", id: note.id, patch: { w: 300, x: 10 } });
+    expect(resized.event?.after).toEqual({ w: 300 });
+  });
+});
+
 describe("atomicity", () => {
   it("D1 batch rolls back the entity write when the event insert fails", async () => {
     const { row } = await newNote();

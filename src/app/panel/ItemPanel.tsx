@@ -216,7 +216,11 @@ function TaskFields({ task, events, disabled }: { task: TaskView; events: readon
       <div className="field">
         <span className="field-label">Board</span>
         {task.x === null ? (
-          <p className="muted small">Not on the board. Drag it from the tray on the Board to place it.</p>
+          <p className="muted small">
+            {done
+              ? "Not on the board. The tray holds open tasks only: reopen it to place it again."
+              : "Not on the board. Drag it from the tray on the Board to place it."}
+          </p>
         ) : (
           <div className="inline-row">
             <span className="small">On the board</span>

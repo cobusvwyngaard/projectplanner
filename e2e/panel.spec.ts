@@ -1,5 +1,5 @@
 // The item panel: a due date typed with the keyboard, closing the panel with
-// Back, and where focus goes when it closes.
+// Back, where focus goes when it closes, and a done task taken off the board.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { MutationResponse } from "../src/shared/api";
@@ -171,4 +171,19 @@ test.describe("closing the panel", () => {
     await expect(panel(page)).toHaveCount(0);
     await expect(card).toBeFocused();
   });
+});
+
+test("a done task taken off the board is not sent to the tray", async ({ page }) => {
+  await signIn(page, 1);
+  const task = await newTask(page, { x: 40, y: 360 });
+  await api(page, "POST", `/api/tasks/${task.id}/complete`);
+  await page.goto("/board");
+  await page.getByRole("button", { name: `Remove “${task.title}” from the board` }).click();
+  await expect(page.locator(`.react-flow__node[data-id="task:${task.id}"]`)).toHaveCount(0);
+  await expect(page.locator(".tray-item").filter({ hasText: task.title })).toHaveCount(0);
+  await page.goto(`/board?item=task:${task.id}`);
+  const board = panel(page).locator(".field").filter({ hasText: "Board" });
+  await expect(board).toContainText("Not on the board");
+  await expect(board).toContainText(/reopen it/i);
+  await expect(board).not.toContainText("Drag it from the tray");
 });

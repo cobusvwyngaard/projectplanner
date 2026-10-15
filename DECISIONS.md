@@ -292,6 +292,9 @@ at the bottom of each section.
   40 px clearance as the Worker's placement), so cards added one after
   another never hide each other. A double-click or a drop goes exactly
   where the pointer is.
+- **The tray holds open tasks only.** A done task can still be taken off
+  the board (tidying up); its panel then says to reopen it to place it
+  again, instead of pointing to the tray.
 - **New items open in the panel.** `+ Note` and a double-click on the empty
   board create a note there; `+ Task` asks only for a title. Both open the
   panel to carry on. Text fields save on blur or Enter (Ctrl/Cmd+Enter in

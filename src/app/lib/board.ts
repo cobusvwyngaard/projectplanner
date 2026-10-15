@@ -98,6 +98,35 @@ export function mergeEdges(shown: readonly LinkEdge[], fresh: readonly LinkEdge[
   return changed ? merged : (shown as LinkEdge[]);
 }
 
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Where the line from the centre of `rect` towards `point` leaves the
+ * rectangle. Links are drawn between these border points, so an edge always
+ * joins the facing sides of its two cards wherever they are.
+ */
+export function borderPoint(rect: Rect, point: XYPosition): XYPosition {
+  const halfW = rect.width / 2;
+  const halfH = rect.height / 2;
+  const centre = { x: rect.x + halfW, y: rect.y + halfH };
+  const dx = point.x - centre.x;
+  const dy = point.y - centre.y;
+  if (dx === 0 && dy === 0) return centre;
+  const scaleX = dx === 0 ? Number.POSITIVE_INFINITY : halfW / Math.abs(dx);
+  const scaleY = dy === 0 ? Number.POSITIVE_INFINITY : halfH / Math.abs(dy);
+  const scale = Math.min(scaleX, scaleY);
+  return { x: centre.x + dx * scale, y: centre.y + dy * scale };
+}
+
+export function centreOf(rect: Rect): XYPosition {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
 /** Board coordinates are stored as whole pixels. */
 export function roundPosition(position: XYPosition): XYPosition {
   return { x: Math.round(position.x), y: Math.round(position.y) };

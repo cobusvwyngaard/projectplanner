@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardEdges, boardNodes, mergeEdges, mergeNodes, nodeItem, roundPosition, type BoardNode } from "../../src/app/lib/board";
+import { borderPoint, boardEdges, boardNodes, centreOf, mergeEdges, mergeNodes, nodeItem, roundPosition, type BoardNode } from "../../src/app/lib/board";
 import { asNote, asTask, itemKey, linksOf, parseItemKey, rebuildRow, searchItems } from "../../src/app/lib/items";
 import { event, link, note, task } from "./app-fixtures";
 
@@ -110,5 +110,25 @@ describe("items", () => {
 describe("roundPosition", () => {
   it("stores whole pixels", () => {
     expect(roundPosition({ x: 10.4, y: -3.6 })).toEqual({ x: 10, y: -4 });
+  });
+});
+
+describe("borderPoint", () => {
+  const card = { x: 0, y: 0, width: 200, height: 100 };
+
+  it("leaves through the side that faces the other card", () => {
+    expect(borderPoint(card, { x: 500, y: 50 })).toEqual({ x: 200, y: 50 });
+    expect(borderPoint(card, { x: -300, y: 50 })).toEqual({ x: 0, y: 50 });
+    expect(borderPoint(card, { x: 100, y: 400 })).toEqual({ x: 100, y: 100 });
+    expect(borderPoint(card, { x: 100, y: -400 })).toEqual({ x: 100, y: 0 });
+  });
+
+  it("follows the line between the centres to the corner region", () => {
+    // Towards the lower right at 45°: the bottom edge is reached first.
+    expect(borderPoint(card, { x: 300, y: 250 })).toEqual({ x: 150, y: 100 });
+  });
+
+  it("returns the centre when both centres coincide", () => {
+    expect(borderPoint(card, centreOf(card))).toEqual({ x: 100, y: 50 });
   });
 });

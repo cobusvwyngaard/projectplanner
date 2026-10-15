@@ -1,0 +1,446 @@
+/* The canvas: React Flow's own sheet is loaded first, these refine it. */
+
+.board {
+  position: relative;
+  display: flex;
+  height: 100%;
+}
+
+.board-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+.board .react-flow {
+  --xy-background-color: #ece9e1;
+  --xy-background-pattern-color: #cdc7b8;
+  --xy-edge-stroke: #8f8878;
+  --xy-edge-stroke-width: 2;
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-connectionline-stroke: var(--accent);
+  --xy-connectionline-stroke-width: 2;
+  --xy-handle-background-color: var(--surface);
+  --xy-handle-border-color: var(--accent);
+  --xy-selection-background-color: rgba(43, 107, 90, 0.08);
+  --xy-selection-border: 1px dashed var(--accent);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-hover);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-color-hover: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: var(--shadow-md);
+  --xy-resize-background-color: var(--accent);
+  font-family: var(--font);
+}
+
+@media (prefers-color-scheme: dark) {
+  .board .react-flow {
+    --xy-background-color: #101214;
+    --xy-background-pattern-color: #30353c;
+    --xy-edge-stroke: #7f8792;
+    --xy-selection-background-color: rgba(108, 196, 169, 0.08);
+  }
+}
+
+.board .react-flow__controls {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Cards bring their own look; React Flow's wrapper only positions them. */
+.board .react-flow__node {
+  border-radius: 6px;
+}
+
+.board .react-flow__node:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* --- Toolbar ---------------------------------------------------------- */
+
+.board-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 30px);
+}
+
+.board-toolbar > .button {
+  box-shadow: var(--shadow-sm);
+}
+
+.board-toolbar .inline-form {
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.board-toolbar .inline-form .input {
+  width: 220px;
+}
+
+.board-toolbar .count {
+  margin-left: 2px;
+}
+
+.board-empty {
+  margin-top: 72px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+/* --- Sticky notes ----------------------------------------------------- */
+
+.note-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 10px;
+  border-radius: 3px 3px 16px 3px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08), 0 6px 14px rgba(40, 32, 10, 0.14);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.note-card--plain {
+  background: var(--note-default);
+  color: var(--note-default-text);
+}
+
+.react-flow__node.selected .note-card {
+  box-shadow: 0 0 0 2px var(--accent), 0 8px 22px rgba(40, 32, 10, 0.2);
+}
+
+.note-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: none;
+}
+
+.note-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent);
+  mask-image: linear-gradient(to bottom, #000 75%, transparent);
+}
+
+.card-footer {
+  flex: none;
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 0.75rem;
+}
+
+.note-card .provenance {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.note-card .badge {
+  padding: 0;
+  background: none;
+  color: inherit;
+}
+
+.task-card .badge--claude {
+  padding: 0 3px;
+}
+
+.card-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* --- Task cards (220 px wide, as board/placement.ts assumes) ---------- */
+
+.task-card {
+  width: 220px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 10px 6px 10px 10px;
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+.react-flow__node.selected .task-card {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow-md);
+}
+
+.task-check {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -2px 0 0 -2px;
+  cursor: pointer;
+}
+
+.task-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.task-card--done .task-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.task-card .card-label {
+  color: var(--muted);
+}
+
+.task-card .provenance {
+  line-height: 1.35;
+}
+
+.card-remove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.card-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.card-remove:hover,
+.card-remove:focus-visible {
+  opacity: 1;
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* --- Handles, resizing, links ----------------------------------------- */
+
+.board .react-flow__handle.handle {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.board .react-flow__node:hover .react-flow__handle,
+.board .react-flow__node.selected .react-flow__handle,
+.board .react-flow__node:focus-visible .react-flow__handle,
+.board .react-flow.connecting .react-flow__handle,
+.board .react-flow__handle.connectingfrom {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .board .react-flow__handle.handle {
+    width: 20px;
+    height: 20px;
+    opacity: 1;
+  }
+
+  .card-remove,
+  .task-check {
+    width: 40px;
+    height: 40px;
+    margin: -8px -4px -8px -8px;
+  }
+
+  .card-remove {
+    margin: -8px -4px 0 0;
+    opacity: 0.8;
+  }
+}
+
+.board .resize-handle {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--surface);
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.board .resize-line {
+  border-color: var(--accent);
+}
+
+.board .link-edge {
+  stroke: var(--xy-edge-stroke);
+  stroke-width: 2;
+}
+
+.board .link-edge--selected,
+.board .react-flow__edge.selected .link-edge {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+/* A selected link and its Unlink button show above the cards it passes behind. */
+.board .react-flow__edgelabel-renderer {
+  z-index: 1001;
+}
+
+.edge-unlink {
+  position: absolute;
+  pointer-events: all;
+  padding: 4px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--danger-text);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+.edge-unlink:hover {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+/* --- Tray ------------------------------------------------------------- */
+
+.tray {
+  flex: none;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  min-height: 0;
+}
+
+.tray-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tray-header h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.tray-hint {
+  margin: 0;
+  padding: 10px 16px 4px;
+}
+
+.tray-list {
+  flex: 1 1 auto;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tray-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: grab;
+}
+
+.tray-item:active {
+  cursor: grabbing;
+}
+
+.tray-title {
+  color: var(--text);
+}
+
+.tray-place {
+  margin-left: auto;
+}
+
+@media (max-width: 767px) {
+  .tray {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 88vw);
+    z-index: 6;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .board-toolbar .inline-form .input {
+    width: 150px;
+  }
+}

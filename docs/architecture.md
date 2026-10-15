@@ -8,18 +8,24 @@ file says *where* things live and the conventions every module follows.
 One Cloudflare Worker (`src/worker/index.ts`) serves everything:
 
 ```
-request ─► OAuthProvider (@cloudflare/workers-oauth-provider)
+request ─► providerFor(origin): OAuthProvider (@cloudflare/workers-oauth-provider), one per origin
             ├─ /mcp                      bearer token checked by the provider ─► PlannerMcp (McpAgent, Durable Object)
             ├─ /token, /register,
             │  /.well-known/*            handled by the provider itself
             └─ everything else ─► Hono app (src/worker/app.ts)
                  ├─ /login (GET, POST), /logout (POST)      public
-                 ├─ /manifest.webmanifest, /sw.js, /icons/*  public, no data
+                 ├─ /manifest.webmanifest, /sw.js,
+                 │  /favicon.svg, /icons/*                  public, no data
                  ├─ /authorize (GET, POST)                   session required, else redirect to /login?next=…
-                 ├─ /api/*                                   session required, else 401 JSON
+                 ├─ /api/sessions, /api/*                    session required, else 401 JSON
                  └─ SPA (index.html, /assets/*)              session required, else redirect to /login?next=…
 cron (every 10 min) ─► src/worker/cron.ts: transcription retries, auto-closing runs
 ```
+
+The provider must know its resource URL (`<origin>/mcp`) when it is built,
+and the Worker's hostname is not known at build time, so
+`src/worker/oauth/provider.ts` builds one provider per request origin and
+caches it (see DECISIONS.md).
 
 The OAuth provider needs a KV namespace. To keep the deployment to one
 Worker, D1 and R2 (SPEC section 1), `OAUTH_KV` is a KV-compatible adapter over
@@ -42,14 +48,26 @@ src/worker/
   auth/                phrase check, sessions, rate limit, login page, middleware
   oauth/               KV adapter, /authorize consent
   api/                 Hono routers for /api/*, one file per area
-  board/               read models: board queries, provenance badges, placement
+  board/               read models: board queries, provenance badges, activity
+                       and history, runs, titles, field rules, placement of new notes
   captures/            upload, R2 storage, transcription, audio streaming (phase 2)
   mcp/                 PlannerMcp agent and one module per tool group (phase 3)
 src/app/               React SPA (Vite); index.html at the repo root
-static/                files copied as-is into the build (manifest, sw.js, icons)
+  main.tsx, App.tsx    entry (starts the store) and the shell: header, nav, panel, toasts
+  api.ts, store.ts     fetch wrapper and the store wired to the browser
+  lib/                 pure logic with unit tests: state, sync (poller), board,
+                       items, list tabs, events in words, activity paging
+  board/ list/ panel/  the canvas, the List view and the item panel
+  activity/ settings/  the Activity and Settings views
+  components/          chips, badges, times, event rows and Revert
+  styles.css           all app styles; board/board.css loads with the canvas
+static/                files copied as-is into the build (favicon.svg; the PWA
+                       manifest, sw.js and icons come with the capture phase)
+scripts/e2e-server.sh  wrangler dev on port 8788 with a fresh local database
 test/worker/           Vitest inside workerd (real D1/R2/DO via Miniflare)
 test/unit/             Vitest under Node (pure functions, source scans)
 test/helpers/          shared test helpers
+test/fixtures/client/  fixed static files the worker tests serve as the app
 e2e/                   Playwright smoke tests against `wrangler dev`
 ```
 
@@ -103,7 +121,19 @@ Rules for all code:
 
 `events.seq` (AUTOINCREMENT) is the commit order. `GET /api/changes?since=<event id>`
 returns events with a higher seq plus the current rows they touched. The app
-polls every 5 s while visible and once on focus (`src/app/store.ts`).
+polls every 5 s while visible and once on focus or when it becomes visible
+(`src/app/lib/sync.ts`, wired to the browser in `src/app/store.ts`): polls
+never overlap, `more` polls again at once, `reset` reloads `/api/bootstrap`,
+and network errors back off quietly.
+
+## Placement
+
+A note created without `x`/`y` (the list's quick-add, and Claude's
+`create_note` in phase 3) goes in the first free cell of a grid
+(`src/worker/board/placement.ts`): 6 columns and 40 rows of cells the size of
+the note, 40 px apart, clear of every open note and placed task. A placed
+task counts as 220 × 100, the size of its card on the canvas. When the grid
+is full the note goes below everything.
 
 ## Provenance
 
@@ -114,12 +144,19 @@ each note/task (`src/worker/board/provenance.ts`), returned as `prov` on
 ## Front end
 
 - React 19 + Vite, `@xyflow/react` for the canvas. No other UI libraries.
-- Path routes: `/board`, `/list`, `/inbox`, `/activity`, `/settings`. `/`
-  opens the board on wide screens and the list on phones (< 768 px).
+  The canvas is loaded lazily, with its own stylesheet.
+- Path routes: `/board`, `/list`, `/activity`, `/settings` (and `/inbox` in
+  phase 2). `/` opens the board on wide screens and the list on phones
+  (< 768 px). The item panel is `?item=note:<id>` or `?item=task:<id>` on
+  any route: a drawer on wide screens, a full-screen sheet on phones.
 - `src/app/api.ts` wraps fetch: JSON in/out, `ApiError` on failure, and a
-  401 sends the browser to `/login?next=<current path>`.
+  401 sends the browser to `/login?next=<current path and query>`.
 - `src/app/store.ts` holds bootstrap state, applies mutation responses and
-  change-feed results, and runs the poller. Components read it with hooks.
+  change-feed results, and runs the poller. Components read it with
+  `usePlanner(selector)`; `src/app/actions.ts` makes every change (API call,
+  optimistic update, toast on failure).
+- Canvas saves: one `PATCH` per moved card on drag stop, `w`/`h` on resize
+  end, arrow-key moves 600 ms after the last key.
 - Plain CSS with custom properties (`src/app/styles.css`), light and dark via
   `prefers-color-scheme`, system font stack. No external fonts, CDNs or
   analytics; the CSP only allows `'self'`.
@@ -138,4 +175,10 @@ npm run test:e2e         # Playwright against wrangler dev (see e2e/README.md)
 
 Worker tests call `freshDb()` from `test/helpers/db.ts` to get an empty,
 migrated database. Test login phrases are set in `vitest.config.ts`; the
-local-development ones are in `.dev.vars` (copy `.dev.vars.example`).
+local-development ones are in `.dev.vars` (copy `.dev.vars.example`). Worker
+tests serve the fixed files in `test/fixtures/client` as the app's static
+assets (`miniflare.assets.directory`), so they do not depend on a build.
+
+The Playwright smoke tests (`e2e/`, see `e2e/README.md`) start
+`scripts/e2e-server.sh`: a fresh local D1 in `.wrangler/e2e`, migrations
+applied, then `wrangler dev` on port 8788, which builds the app first.

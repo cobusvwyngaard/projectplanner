@@ -16,6 +16,7 @@ export function TextField({
   placeholder,
   disabled = false,
   large = false,
+  autoFocus = false,
 }: {
   label: string;
   value: string;
@@ -25,6 +26,7 @@ export function TextField({
   placeholder?: string;
   disabled?: boolean;
   large?: boolean;
+  autoFocus?: boolean;
 }) {
   const id = useId();
   const field = useDraft(value, onSave, validate);
@@ -40,6 +42,7 @@ export function TextField({
     value: field.draft,
     placeholder,
     disabled,
+    autoFocus,
     onChange: (e: { target: { value: string } }) => field.change(e.target.value),
     onBlur: () => void field.commit(),
     onKeyDown,

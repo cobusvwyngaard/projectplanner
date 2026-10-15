@@ -32,9 +32,11 @@ function PanelFrame({ title, children }: { title: string; children: ReactNode })
   const phone = useIsPhone();
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
+  const frame = useRef<HTMLElement>(null);
 
+  // Focus moves into the panel when it opens, unless a field already took it.
   useEffect(() => {
-    heading.current?.focus();
+    if (!frame.current?.contains(document.activeElement)) heading.current?.focus();
   }, [title]);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ function PanelFrame({ title, children }: { title: string; children: ReactNode })
   }, []);
 
   return (
-    <aside className="panel" role="dialog" aria-labelledby={headingId}>
+    <aside className="panel" role="dialog" aria-labelledby={headingId} ref={frame}>
       <header className="panel-header">
         <button type="button" className="icon-button" aria-label={phone ? "Back" : "Close"} onClick={closeItem}>
           {phone ? <BackIcon /> : <CloseIcon />}
@@ -208,11 +210,14 @@ function TaskFields({ task, disabled }: { task: TaskView; disabled: boolean }) {
 }
 
 function NoteFields({ note, disabled }: { note: NoteView; disabled: boolean }) {
+  // A note that was just made (nothing in it yet) is ready for typing.
+  const [blank] = useState(() => note.title === "" && note.body === "");
   return (
     <div className="fields">
       <TextField
         label="Title"
         large
+        autoFocus={blank && !disabled}
         value={note.title}
         disabled={disabled}
         placeholder="Untitled note"

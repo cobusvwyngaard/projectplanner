@@ -136,6 +136,13 @@ at the bottom of each section.
   pages; `public, max-age=31536000, immutable` for 200s under `/assets/*`
   (still behind the session check); `no-cache` for the public files
   (`/manifest.webmanifest`, `/sw.js`, `/favicon.svg`, `/icons/*`).
+- **https only.** A plain-http request on any host other than a loopback one
+  gets a 308 to the same URL on https in `index.ts`, before the OAuth
+  provider (which cannot be built for an http origin) or anything else runs.
+  Responses the Hono app builds over https carry
+  `Strict-Transport-Security: max-age=31536000` (not on localhost, so local
+  development keeps working). No `includeSubDomains` or preload: the planner
+  may share a domain with other sites.
 - **Security headers** are set by a Hono middleware on a mutable copy of the
   final response. A handler may set its own CSP (the consent page does).
   Responses made by the OAuth provider itself (`/token`, `/register`,

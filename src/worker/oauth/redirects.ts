@@ -3,16 +3,13 @@
 // other redirect URI is refused before the OAuth provider sees it, so the
 // planner's address can never bounce a browser to someone else's site.
 
+import { isLoopbackHostname } from "../lib/http";
+
 /** Claude's OAuth callbacks, compared as origin + path (a query is allowed). */
 export const CLAUDE_REDIRECT_URIS: readonly string[] = [
   "https://claude.ai/api/mcp/auth_callback",
   "https://claude.com/api/mcp/auth_callback",
 ];
-
-/** localhost, 127.0.0.0/8 or [::1] (as URL.hostname writes them). */
-export function isLoopbackHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "[::1]" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
-}
 
 /** True for one of Claude's callbacks, or an http(s) address on this device. */
 export function isAllowedRedirectUri(uri: string): boolean {

@@ -1,3 +1,4 @@
+import { SELF } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ORIGIN, PHRASE_1, PHRASE_2, call, signIn, withSession, type SignedIn } from "../helpers/auth";
@@ -68,6 +69,31 @@ describe("without a session", () => {
     const icon = await call("/icons/icon-fixture.svg");
     expect(icon.status).toBe(200);
     expectSecurityHeaders(icon);
+  });
+});
+
+describe("plain http", () => {
+  it("is sent to the same address on https before anything else runs", async () => {
+    for (const [method, path] of [["GET", "/login?next=%2Fboard"], ["POST", "/token"], ["GET", "/mcp"], ["GET", "/.well-known/oauth-authorization-server"]] as const) {
+      const res = await SELF.fetch(`http://planner.test${path}`, { method, redirect: "manual" });
+      expect(res.status, path).toBe(308);
+      expect(res.headers.get("Location"), path).toBe(`https://planner.test${path}`);
+    }
+  });
+
+  it("is served as it is on a loopback address (local development)", async () => {
+    const res = await SELF.fetch("http://localhost:8788/login", { redirect: "manual" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Strict-Transport-Security")).toBeNull();
+  });
+
+  it("https responses tell browsers to stay on https, except on localhost", async () => {
+    for (const path of ["/login", "/board", "/api/sessions"]) {
+      const res = await call(path);
+      expect(res.headers.get("Strict-Transport-Security"), path).toBe("max-age=31536000");
+    }
+    const local = await SELF.fetch("https://localhost/login", { redirect: "manual" });
+    expect(local.headers.get("Strict-Transport-Security")).toBeNull();
   });
 });
 

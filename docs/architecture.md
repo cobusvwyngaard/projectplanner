@@ -8,7 +8,8 @@ file says *where* things live and the conventions every module follows.
 One Cloudflare Worker (`src/worker/index.ts`) serves everything:
 
 ```
-request ─► POST /register listing a redirect URI other than Claude's or a
+request ─► plain http on a host other than localhost: 308 to the same URL on https
+        ─► POST /register listing a redirect URI other than Claude's or a
           loopback one: 400 invalid_redirect_uri (oauth/redirects.ts)
         ─► providerFor(origin): OAuthProvider (@cloudflare/workers-oauth-provider), one per origin
             ├─ /mcp                      bearer token checked by the provider ─► PlannerMcp (McpAgent, Durable Object)

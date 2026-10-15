@@ -15,7 +15,8 @@ import { CONTENT_SECURITY_POLICY } from "../auth/headers";
 import { escapeHtml, renderMessagePage, renderPage } from "../auth/html";
 import { isCrossSite } from "../auth/middleware";
 import type { AppBindings, GrantProps } from "../env";
-import { isAllowedRedirectUri, isLoopbackHostname } from "./redirects";
+import { isLoopbackHostname } from "../lib/http";
+import { isAllowedRedirectUri } from "./redirects";
 
 export const authorizeRouter = new Hono<AppBindings>();
 

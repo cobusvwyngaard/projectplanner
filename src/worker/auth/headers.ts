@@ -2,6 +2,7 @@
 
 import type { MiddlewareHandler } from "hono";
 import type { AppBindings } from "../env";
+import { isLoopbackHostname } from "../lib/http";
 
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -24,6 +25,9 @@ const FIXED_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["Permissions-Policy", "microphone=(self), camera=(), geolocation=()"],
 ];
 
+/** Browsers that have seen this stay on https for a year (not sent on localhost). */
+const STRICT_TRANSPORT_SECURITY = "max-age=31536000";
+
 /** Files anyone may fetch: they carry no data and the browser needs them before signing in. */
 export const PUBLIC_FILES = ["/manifest.webmanifest", "/sw.js", "/favicon.svg", "/icons/*"] as const;
 
@@ -39,9 +43,9 @@ function cacheControl(path: string, status: number): string {
 }
 
 /**
- * Adds the security headers and Cache-Control to the final response. A
- * handler may set its own Content-Security-Policy (the consent page does);
- * the other headers are always these.
+ * Adds the security headers (HSTS on https) and Cache-Control to the final
+ * response. A handler may set its own Content-Security-Policy (the consent
+ * page does); the other headers are always these.
  */
 export const securityHeaders: MiddlewareHandler<AppBindings> = async (c, next) => {
   await next();
@@ -49,6 +53,10 @@ export const securityHeaders: MiddlewareHandler<AppBindings> = async (c, next) =
   const res = new Response(c.res.body, c.res);
   if (!res.headers.has("Content-Security-Policy")) res.headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   for (const [name, value] of FIXED_HEADERS) res.headers.set(name, value);
+  const url = new URL(c.req.url);
+  if (url.protocol === "https:" && !isLoopbackHostname(url.hostname)) {
+    res.headers.set("Strict-Transport-Security", STRICT_TRANSPORT_SECURITY);
+  }
   res.headers.set("Cache-Control", cacheControl(c.req.path, res.status));
   // Clear first: assigning over an existing response copies its headers back in.
   c.res = undefined;

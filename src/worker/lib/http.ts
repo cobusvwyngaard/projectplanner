@@ -48,3 +48,8 @@ export async function jsonBody<S extends z.ZodType>(c: Context, schema: S): Prom
   }
   return parse(schema, raw);
 }
+
+/** localhost, 127.0.0.0/8 or [::1] (as URL.hostname writes them). */
+export function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "[::1]" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
+}

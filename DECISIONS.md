@@ -102,10 +102,19 @@ at the bottom of each section.
 - **Rate limit counts before checking.** Each attempt is counted in one
   atomic upsert before the phrase is compared, and the 5th sets the lockout
   in the same statement, so concurrent requests get at most 5 checks per
-  window. A correct 5th attempt deletes the record. Lockouts double (15, 30,
-  60 … minutes) up to 24 hours, so someone sharing a carrier-NAT address
-  cannot keep a user out for days; 24 hours without a failure resets both
-  the failures and the lockout count.
+  window. A correct 5th attempt deletes the record.
+- **Lockouts double without a cap (SPEC 3.3).** 15, 30, 60 … minutes, with
+  the doubling stopped at 2^20 only to keep the numbers finite. An earlier
+  version capped lockouts at 24 hours and measured the 24-hour reset from
+  the start of the last lockout, so a 24-hour lockout reset itself and the
+  schedule started again at 15 minutes (about 17 guesses a day per address
+  instead of a shrinking number). That weakened "doubling on each further
+  lockout", so the cap is gone and the reset (failures and lockout count
+  back to 0) now needs 24 hours after the end of the last lockout or the
+  last failure, whichever is later. Someone sharing a carrier-NAT address
+  can lock out new sign-ins from it for longer; existing sessions are not
+  affected (they last 400 days), and either person can sign in from another
+  network.
 - **Cross-site posts are refused, not counted.** `POST /login` with a foreign
   `Origin` or `Sec-Fetch-Site: cross-site` gets the generic 401 and does not
   count, so no website can lock a visitor out. `POST /logout` and

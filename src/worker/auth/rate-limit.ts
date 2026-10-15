@@ -2,9 +2,10 @@
 //
 // Per client address: after 5 failed attempts the address is locked out for
 // 15 minutes, and each further lockout doubles that (15, 30, 60 minutes ...,
-// at most 24 hours). Failures start again from 0 at each lockout. A success
-// clears the record, and after 24 hours without a failure the lockout count
-// starts again from 0.
+// with no upper limit). Failures start again from 0 at each lockout. A
+// success clears the record. 24 hours after the end of the last lockout or
+// the last failure, whichever is later, the failures and the lockout count
+// start again from 0, so a long lockout never ends in a fresh start.
 //
 // An attempt is counted BEFORE the phrase is checked, in one atomic upsert
 // that refuses while the address is locked out. The 5th attempt sets the
@@ -16,7 +17,8 @@ import { DAY_MS, addMs, iso } from "../lib/time";
 
 export const MAX_FAILURES = 5;
 export const FIRST_LOCKOUT_MINUTES = 15;
-export const MAX_LOCKOUT_MINUTES = 24 * 60;
+/** Doublings stop here only to keep the numbers finite (15 × 2^20 minutes is about 30 years). */
+export const MAX_LOCKOUT_DOUBLINGS = 20;
 export const LOCKOUT_DECAY_MS = DAY_MS;
 
 /** The address the limit applies to: CF-Connecting-IP, IPv6 grouped by /64. */
@@ -90,24 +92,27 @@ export interface Attempt {
  * null, without counting anything, while the address is locked out.
  */
 export async function beginAttempt(db: D1Database, key: string, now: Date = new Date()): Promise<Attempt | null> {
-  // In an upsert's SET clause every column name means the value before the update.
+  // In an upsert's SET clause every column name means the value before the
+  // update. `quiet` is true when the last failure and the end of the last
+  // lockout (ISO strings compare in time order) are both over 24 hours ago.
+  const quiet = `max(updated_at, COALESCE(locked_until, updated_at)) < ?3`;
   const row = await db
     .prepare(
       `INSERT INTO login_attempts (ip, failures, locked_until, lockouts, updated_at)
        VALUES (?1, 1, NULL, 0, ?2)
        ON CONFLICT (ip) DO UPDATE SET
-         failures = CASE WHEN updated_at < ?3 OR failures >= ?4 THEN 1 ELSE failures + 1 END,
-         lockouts = CASE WHEN updated_at < ?3 THEN 0 ELSE lockouts END,
+         failures = CASE WHEN ${quiet} OR failures >= ?4 THEN 1 ELSE failures + 1 END,
+         lockouts = CASE WHEN ${quiet} THEN 0 ELSE lockouts END,
          locked_until = CASE
-           WHEN updated_at >= ?3 AND failures + 1 = ?4
-           THEN strftime('%Y-%m-%dT%H:%M:%fZ', ?2, '+' || min(?5 * (1 << min(lockouts, 16)), ?6) || ' minutes')
+           WHEN NOT (${quiet}) AND failures + 1 = ?4
+           THEN strftime('%Y-%m-%dT%H:%M:%fZ', ?2, '+' || (?5 * (1 << min(lockouts, ?6))) || ' minutes')
            ELSE NULL
          END,
          updated_at = ?2
        WHERE locked_until IS NULL OR locked_until <= ?2
        RETURNING failures`,
     )
-    .bind(key, iso(now), iso(addMs(now, -LOCKOUT_DECAY_MS)), MAX_FAILURES, FIRST_LOCKOUT_MINUTES, MAX_LOCKOUT_MINUTES)
+    .bind(key, iso(now), iso(addMs(now, -LOCKOUT_DECAY_MS)), MAX_FAILURES, FIRST_LOCKOUT_MINUTES, MAX_LOCKOUT_DOUBLINGS)
     .first<{ failures: number }>();
   return row ? { key, failures: row.failures } : null;
 }

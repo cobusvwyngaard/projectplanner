@@ -66,23 +66,49 @@ describe("lockout", () => {
     expect((await row())?.lockouts).toBe(4);
   });
 
-  it("never locks out for more than 24 hours", async () => {
+  it("keeps doubling past 24 hours for a guesser who tries whenever allowed", async () => {
+    let now = T0;
+    for (let lockout = 0; lockout < 10; lockout++) {
+      const minutes = 15 * 2 ** lockout;
+      expect(await fail(MAX_FAILURES, now)).toBe(true);
+      expect((await row())?.locked_until, `lockout ${lockout + 1}`).toBe(addMs(now, minutes * MINUTE_MS).toISOString());
+      now = addMs(now, minutes * MINUTE_MS);
+    }
+    // The 10th lockout lasted 7680 minutes (5⅓ days).
+    expect((await row())?.lockouts).toBe(10);
+  });
+
+  it("bounds the doubling only to keep the numbers finite", async () => {
     await db
-      .prepare(`INSERT INTO login_attempts (ip, failures, locked_until, lockouts, updated_at) VALUES (?, 0, NULL, 12, ?)`)
+      .prepare(`INSERT INTO login_attempts (ip, failures, locked_until, lockouts, updated_at) VALUES (?, 0, NULL, 40, ?)`)
       .bind(KEY, T0.toISOString())
       .run();
     await fail(MAX_FAILURES, T0);
-    expect((await row())?.locked_until).toBe(addMs(T0, 24 * HOUR_MS).toISOString());
+    expect((await row())?.locked_until).toBe(addMs(T0, 15 * 2 ** 20 * MINUTE_MS).toISOString());
   });
 
-  it("forgets the lockout count after 24 hours without failures", async () => {
+  it("forgets the lockout count 24 hours after the last lockout ends", async () => {
     await fail(MAX_FAILURES, T0);
-    await fail(MAX_FAILURES, addMs(T0, 15 * MINUTE_MS));
-    expect((await row())?.lockouts).toBe(2);
-    const later = addMs(T0, 15 * MINUTE_MS + 24 * HOUR_MS + 1000);
+    const second = addMs(T0, 15 * MINUTE_MS);
+    await fail(MAX_FAILURES, second);
+    const ends = addMs(second, 30 * MINUTE_MS);
+    expect(await row()).toMatchObject({ lockouts: 2, locked_until: ends.toISOString() });
+    // 24 hours after the lockout started, but not after it ended: still counted.
+    const early = addMs(second, 24 * HOUR_MS + 1000);
+    await fail(MAX_FAILURES, early);
+    expect(await row()).toMatchObject({ lockouts: 3, locked_until: addMs(early, 60 * MINUTE_MS).toISOString() });
+    // 24 hours after that lockout ended: back to a first lockout of 15 minutes.
+    const later = addMs(early, 60 * MINUTE_MS + 24 * HOUR_MS + 1000);
     await fail(MAX_FAILURES, later);
-    // Back to a first lockout: 15 minutes, not 60.
     expect(await row()).toMatchObject({ lockouts: 1, locked_until: addMs(later, 15 * MINUTE_MS).toISOString() });
+  });
+
+  it("measures the 24 hours from the last failure when that is later", async () => {
+    await fail(MAX_FAILURES, T0);
+    const failure = addMs(T0, 20 * MINUTE_MS);
+    await fail(1, failure);
+    await fail(MAX_FAILURES - 1, addMs(failure, 24 * HOUR_MS - 1000));
+    expect((await row())?.lockouts).toBe(2);
   });
 
   it("forgets old failures after 24 hours too", async () => {

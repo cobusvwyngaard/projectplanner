@@ -8,7 +8,8 @@ import { providerOptions } from "../../src/worker/oauth/provider";
 import { ORIGIN, PHRASE_1, PHRASE_2, call, postLogin, sessionTokenFrom, signIn, type SignedIn } from "../helpers/auth";
 import { USER_1, USER_2, freshDb } from "../helpers/db";
 
-const REDIRECT_URI = "https://client.test/callback";
+const REDIRECT_URI = "https://claude.ai/api/mcp/auth_callback";
+const EVIL_URI = "https://evil.example/landing";
 const RESOURCE = `${ORIGIN}/mcp`;
 
 beforeEach(async () => {
@@ -146,9 +147,10 @@ describe("/authorize without a session", () => {
   });
 
   it("refuses the consent POST too", async () => {
-    const res = await call("/authorize?client_id=x", { method: "POST", headers: { Origin: ORIGIN } });
+    const query = new URLSearchParams({ client_id: "x", redirect_uri: REDIRECT_URI }).toString();
+    const res = await call(`/authorize?${query}`, { method: "POST", headers: { Origin: ORIGIN } });
     expect(res.status).toBe(302);
-    expect(res.headers.get("Location")).toBe("/login?next=%2Fauthorize%3Fclient_id%3Dx");
+    expect(res.headers.get("Location")).toBe(`/login?next=${encodeURIComponent(`/authorize?${query}`)}`);
   });
 });
 
@@ -191,7 +193,7 @@ describe("the consent page", () => {
       "Allow <strong>Claude &lt;script&gt;alert(1)&lt;/script&gt;</strong> to read and change the planner on behalf of <strong>Person 2</strong>?",
     );
     expect(html).not.toContain("<script>");
-    expect(html).toContain("<strong>client.test</strong>");
+    expect(html).toContain("<strong>claude.ai</strong>");
     expect(html).toContain(`action="/authorize?${query.replace(/&/g, "&amp;")}"`);
     expect(html).toContain(`value="allow">Allow</button>`);
     expect(html).toContain(`value="cancel" class="secondary">Cancel</button>`);
@@ -336,5 +338,78 @@ describe("the full connector flow", () => {
       scopes_supported: ["planner"],
       code_challenge_methods_supported: ["S256"],
     });
+  });
+});
+
+describe("the planner only connects to Claude", () => {
+  /** A client stored with a foreign redirect URI, as /register allowed before. */
+  async function foreignClient(): Promise<string> {
+    const helperEnv: Partial<AppEnv> = { ...env, OAUTH_KV: oauthKv(env.DB) };
+    const helpers = getOAuthApi(providerOptions(ORIGIN), helperEnv as AppEnv);
+    const client = await helpers.createClient({
+      clientName: "Evil",
+      redirectUris: [EVIL_URI],
+      tokenEndpointAuthMethod: "none",
+    });
+    return client.clientId;
+  }
+
+  async function expectRefused(res: Response): Promise<void> {
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Location")).toBeNull();
+    const html = await res.text();
+    expect(html).toContain("This planner only connects to Claude");
+    expect(html).not.toContain("evil.example");
+  }
+
+  it("never sends the browser to a foreign redirect URI, not even with an error", async () => {
+    const clientId = await foreignClient();
+    const { challenge } = await pkce();
+    const session = await signIn(PHRASE_1);
+    const good = authorizeQuery(clientId, challenge, { redirect_uri: EVIL_URI });
+    // Without PKCE the provider would answer with an error redirect.
+    const bad = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: EVIL_URI, state: "s" }).toString();
+    for (const query of [good, bad]) {
+      await expectRefused(await call(`/authorize?${query}`, { headers: { Cookie: session.cookie } }));
+      await expectRefused(await consent(query, session, "allow"));
+      await expectRefused(await consent(query, session, "cancel"));
+      // Signed out, the phrase page is not offered either.
+      await expectRefused(await call(`/authorize?${query}`));
+    }
+  });
+
+  it("refuses a foreign redirect URI for a client registered for Claude", async () => {
+    const clientId = await registerClient();
+    const { challenge } = await pkce();
+    const session = await signIn(PHRASE_1);
+    const query = authorizeQuery(clientId, challenge, { redirect_uri: "https://claude.ai.evil.example/api/mcp/auth_callback" });
+    await expectRefused(await call(`/authorize?${query}`, { headers: { Cookie: session.cookie } }));
+    const missing = new URLSearchParams({ response_type: "code", client_id: clientId }).toString();
+    await expectRefused(await call(`/authorize?${missing}`, { headers: { Cookie: session.cookie } }));
+  });
+
+  it("refuses to register a client with any foreign redirect URI", async () => {
+    for (const uris of [[EVIL_URI], [REDIRECT_URI, EVIL_URI], ["https://claude.ai/other"], ["http://claude.ai/api/mcp/auth_callback"]]) {
+      const res = await call("/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_name: "Evil", redirect_uris: uris, token_endpoint_auth_method: "none" }),
+      });
+      expect(res.status, uris.join(" ")).toBe(400);
+      expect(await res.json()).toMatchObject({ error: "invalid_redirect_uri" });
+    }
+  });
+
+  it("registers Claude's callbacks and local tools on a loopback address", async () => {
+    await registerClient("Claude", "https://claude.com/api/mcp/auth_callback");
+    const local = await registerClient("MCP Inspector", "http://localhost:6274/oauth/callback");
+    await registerClient("Local", "http://127.0.0.1:33418/callback");
+    await registerClient("Local v6", "http://[::1]:33418/callback");
+    const { challenge } = await pkce();
+    const session = await signIn(PHRASE_1);
+    const query = authorizeQuery(local, challenge, { redirect_uri: "http://localhost:6274/oauth/callback" });
+    const page = await call(`/authorize?${query}`, { headers: { Cookie: session.cookie } });
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain("a program on this device");
   });
 });

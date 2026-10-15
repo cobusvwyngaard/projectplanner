@@ -6,15 +6,21 @@ import type { AppEnv } from "./env";
 import { PlannerMcp } from "./mcp/agent";
 import { oauthKv } from "./oauth/kv";
 import { providerFor } from "./oauth/provider";
+import { refuseForeignRegistration } from "./oauth/redirects";
 
 export { PlannerMcp };
 
 export default {
-  fetch(request, env, ctx) {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === "/register" && request.method === "POST") {
+      const refused = await refuseForeignRegistration(request);
+      if (refused) return refused;
+    }
     // A per-request copy of env with the D1-backed store the provider needs.
     // The provider adds OAUTH_PROVIDER to this copy before any handler runs.
     const appEnv = { ...env, OAUTH_KV: oauthKv(env.DB) } as AppEnv;
-    return providerFor(new URL(request.url).origin).fetch(request, appEnv, ctx);
+    return providerFor(url.origin).fetch(request, appEnv, ctx);
   },
   scheduled(_controller, env, ctx) {
     ctx.waitUntil(runScheduled(env));

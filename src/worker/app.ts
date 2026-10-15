@@ -12,7 +12,7 @@ import { sessionsRouter } from "./api/sessions";
 import type { AppBindings } from "./env";
 import { NotFoundError } from "./lib/errors";
 import { jsonError } from "./lib/http";
-import { authorizeRouter } from "./oauth/authorize";
+import { authorizeRouter, requireAllowedRedirect } from "./oauth/authorize";
 
 export const app = new Hono<AppBindings>();
 
@@ -38,7 +38,7 @@ app.all("/api/*", () => {
   throw new NotFoundError("No such API route.");
 });
 
-app.use("/authorize", requirePageSession);
+app.use("/authorize", requireAllowedRedirect, requirePageSession);
 app.route("/authorize", authorizeRouter);
 
 // The single-page app. Wrangler's not_found_handling serves index.html for

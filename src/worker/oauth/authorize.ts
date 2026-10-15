@@ -10,24 +10,40 @@ import {
   type AuthRequest,
   type ClientInfo,
 } from "@cloudflare/workers-oauth-provider";
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { CONTENT_SECURITY_POLICY } from "../auth/headers";
 import { escapeHtml, renderMessagePage, renderPage } from "../auth/html";
 import { isCrossSite } from "../auth/middleware";
 import type { AppBindings, GrantProps } from "../env";
+import { isAllowedRedirectUri, isLoopbackHostname } from "./redirects";
 
 export const authorizeRouter = new Hono<AppBindings>();
 
-const LOOPBACK_ORIGIN_RE = /^http:\/\/(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d{1,5})?$/;
+/**
+ * Runs before the session check and before the provider: a request whose
+ * redirect_uri is not Claude's callback or a loopback address gets a plain
+ * 400 page and is never redirected anywhere, not even to the phrase page.
+ */
+export const requireAllowedRedirect: MiddlewareHandler<AppBindings> = async (c, next) => {
+  const redirectUri = new URL(c.req.url).searchParams.get("redirect_uri");
+  if (redirectUri !== null && isAllowedRedirectUri(redirectUri)) return next();
+  return c.html(
+    renderMessagePage(
+      "This planner only connects to Claude",
+      "The link you followed asks to connect a different app. Nothing was connected or shared.",
+    ),
+    400,
+  );
+};
 
 /**
  * Chrome applies form-action to the redirect that follows the form POST, so
- * the consent page also allows posting on to https: (claude.ai and other
- * clients) and to a loopback redirect, for local tools.
+ * the consent page also allows posting on to https: (claude.ai) and to an
+ * http loopback redirect, for local tools.
  */
 function consentPolicy(redirectUri: string): string {
-  const origin = new URL(redirectUri).origin;
-  const extra = LOOPBACK_ORIGIN_RE.test(origin) ? ` ${origin}` : "";
+  const url = new URL(redirectUri);
+  const extra = url.protocol === "http:" && isLoopbackHostname(url.hostname) ? ` ${url.origin}` : "";
   return CONTENT_SECURITY_POLICY.replace("form-action 'self'", `form-action 'self' https:${extra}`);
 }
 
@@ -47,7 +63,8 @@ async function parseRequest(c: Context<AppBindings>): Promise<AuthRequest | Resp
     return await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
   } catch (err) {
     if (!(err instanceof AuthorizationError)) throw err;
-    // The provider sets redirectTo only once the client and its redirect URI are verified.
+    // The provider sets redirectTo only once the client and its redirect URI
+    // are verified, and requireAllowedRedirect has allowed that URI.
     if (err.redirectTo) return c.redirect(err.redirectTo, 302);
     return invalidRequest(c);
   }
@@ -71,7 +88,7 @@ authorizeRouter.get("/", async (c) => {
 
   const user = c.get("user");
   const host = redirectHost(parsed.redirectUri);
-  const loopback = LOOPBACK_ORIGIN_RE.test(new URL(parsed.redirectUri).origin);
+  const loopback = isLoopbackHostname(new URL(parsed.redirectUri).hostname);
   const action = `/authorize${new URL(c.req.url).search}`;
   const warning = loopback
     ? `<p class="notice warning">This sends the connection to a program on this device. Only allow it if you started this yourself.</p>\n`

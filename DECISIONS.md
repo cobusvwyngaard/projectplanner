@@ -131,14 +131,24 @@ at the bottom of each section.
   final response. A handler may set its own CSP (the consent page does).
   Responses made by the OAuth provider itself (`/token`, `/register`,
   `/.well-known/*`, `/mcp`) keep the provider's headers.
+- **The planner only connects to Claude.** `CLAUDE_REDIRECT_URIS` in
+  `oauth/redirects.ts` is the one list: `https://claude.ai/api/mcp/auth_callback`
+  and `https://claude.com/api/mcp/auth_callback` (origin and path), plus any
+  http(s) loopback redirect (localhost, 127.0.0.0/8, [::1]) for local tools
+  such as MCP Inspector. `/authorize` checks `redirect_uri` before the
+  session check and before the provider: anything else gets a plain 400 page
+  and no redirect at all, not even an error redirect or the phrase page, so
+  the planner's address cannot bounce anyone to another site (RFC 9700
+  4.11.2). `POST /register` with any other redirect URI is refused before the
+  provider with 400 `invalid_redirect_uri` (RFC 7591).
 - **Consent page CSP** allows `form-action 'self' https:` plus the redirect's
-  origin only for an `http` loopback redirect (localhost, 127.x.x.x, [::1]),
-  so local tools such as MCP Inspector work; the page then shows a warning.
+  origin only for an `http` loopback redirect, so local tools work; a
+  loopback redirect also gets a warning on the page.
 - **Grants and clients.** The grant label is the client's own name (else its
-  client id); `scope` is passed through as parsed. `/register` keeps the
-  provider's dynamic client registration defaults (public clients, 90-day
-  client TTL, 1-hour access and 30-day refresh tokens); claude.ai registers
-  this way. CIMD stays off: it would need the `global_fetch_strictly_public`
+  client id); `scope` is passed through as parsed. Apart from the redirect
+  URIs, `/register` keeps the provider's dynamic client registration
+  defaults (public clients, 90-day client TTL, 1-hour access and 30-day
+  refresh tokens); claude.ai registers this way. CIMD stays off: it would need the `global_fetch_strictly_public`
   flag, and no client needs it yet.
 - **Unknown routes.** Other methods on page paths (e.g. `POST /board`) are a
   404 page once signed in and a redirect to the phrase page otherwise.

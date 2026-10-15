@@ -8,7 +8,9 @@ file says *where* things live and the conventions every module follows.
 One Cloudflare Worker (`src/worker/index.ts`) serves everything:
 
 ```
-request ─► providerFor(origin): OAuthProvider (@cloudflare/workers-oauth-provider), one per origin
+request ─► POST /register listing a redirect URI other than Claude's or a
+          loopback one: 400 invalid_redirect_uri (oauth/redirects.ts)
+        ─► providerFor(origin): OAuthProvider (@cloudflare/workers-oauth-provider), one per origin
             ├─ /mcp                      bearer token checked by the provider ─► PlannerMcp (McpAgent, Durable Object)
             ├─ /token, /register,
             │  /.well-known/*            handled by the provider itself
@@ -16,7 +18,8 @@ request ─► providerFor(origin): OAuthProvider (@cloudflare/workers-oauth-pro
                  ├─ /login (GET, POST), /logout (POST)      public
                  ├─ /manifest.webmanifest, /sw.js,
                  │  /favicon.svg, /icons/*                  public, no data
-                 ├─ /authorize (GET, POST)                   session required, else redirect to /login?next=…
+                 ├─ /authorize (GET, POST)                   redirect_uri must be allowed, else a 400 page;
+                 │                                           session required, else redirect to /login?next=…
                  ├─ /api/sessions, /api/*                    session required, else 401 JSON
                  └─ SPA (index.html, /assets/*)              session required, else redirect to /login?next=…
 cron (every 10 min) ─► src/worker/cron.ts: transcription retries, auto-closing runs
@@ -46,7 +49,7 @@ src/worker/
   lib/                 ulid, errors (AppError → HTTP), time (Africa/Johannesburg)
   mutate/              THE ONLY WRITE PATH for board data (see below)
   auth/                phrase check, sessions, rate limit, login page, middleware
-  oauth/               KV adapter, /authorize consent
+  oauth/               KV adapter, /authorize consent, the redirect URI allowlist
   api/                 Hono routers for /api/*, one file per area
   board/               read models: board queries, provenance badges, activity
                        and history, runs, titles, field rules, placement of new notes

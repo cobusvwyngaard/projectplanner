@@ -13,7 +13,14 @@
 // writes additionally carry a guard that its run is still open.
 
 import type { ItemRef, PlannerEvent } from "../../shared/types";
-import { ConflictError, ForbiddenError, NotFoundError, RunNotOpenError, ValidationError } from "../lib/errors";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  RunNotOpenError,
+  StaleWriteError,
+  ValidationError,
+} from "../lib/errors";
 import { HOUR_MS, addMs, iso } from "../lib/time";
 import { ulid } from "../lib/ulid";
 import type { Actor } from "./actor";
@@ -57,6 +64,12 @@ export interface MutateOptions {
   now?: Date;
   /** Statements run first, inside the same transaction (e.g. inserting a run). */
   prelude?: D1PreparedStatement[];
+  /**
+   * Read again and retry when a write guard finds a row changed since it was
+   * read (default true). With false a StaleWriteError is thrown at once, for
+   * callers that must check the new state themselves (reverts).
+   */
+  retryStale?: boolean;
 }
 
 /** Apply one change. See mutateMany(). */
@@ -105,7 +118,7 @@ export async function mutateMany(
         results = await db.batch(statements);
       } catch (err) {
         const kind = classify(err);
-        if (kind === "retry" && attempt < MAX_ATTEMPTS) continue;
+        if (kind === "retry" && options.retryStale !== false && attempt < MAX_ATTEMPTS) continue;
         throw translate(err, kind);
       }
       return prepared.map((p) => {
@@ -491,7 +504,7 @@ function classify(err: unknown): Failure {
 function translate(err: unknown, kind: Failure): Error {
   switch (kind) {
     case "retry":
-      return new ConflictError("Someone else changed this at the same moment. Please try again.");
+      return new StaleWriteError();
     case "run":
       return new RunNotOpenError();
     case "claim":

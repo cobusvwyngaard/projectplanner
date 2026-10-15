@@ -81,7 +81,8 @@ e2e/                   Playwright smoke tests against `wrangler dev`
 1. an UPDATE conditional on the changed fields still holding the values read
    (or an INSERT for creations);
 2. a `write_guard` row that aborts the batch if that UPDATE missed (the
-   batch is retried up to three times, then a 409 is returned);
+   batch is retried up to three times, then a 409 is returned; reverts pass
+   `retryStale: false` and start again from their conflict check instead);
 3. the `events` row with the before/after diff of the changed fields
    (the full row for creations).
 

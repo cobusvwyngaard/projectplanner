@@ -3,7 +3,7 @@
 // of the event it reverts.
 
 import type { PlannerEvent } from "../../shared/types";
-import { AppError, NotFoundError, ValidationError } from "../lib/errors";
+import { AppError, NotFoundError, StaleWriteError, ValidationError } from "../lib/errors";
 import type { Actor } from "./actor";
 import { ENTITIES, type MutableEntity } from "./entities";
 import { EVENT_COLUMNS, parseEventRow, type EventRow } from "./events";
@@ -110,6 +110,9 @@ export async function revertRun(
   return revertEvents(db, actor, events, new Set(events.map((e) => e.id)), options);
 }
 
+/** How often a revert starts again when a change lands while it is running. */
+const MAX_REVERT_ATTEMPTS = 3;
+
 async function revertEvents(
   db: D1Database,
   actor: Actor,
@@ -117,18 +120,48 @@ async function revertEvents(
   ownIds: ReadonlySet<string>,
   options: { confirm?: boolean; now?: Date },
 ): Promise<RevertOutcome> {
-  const now = options.now ?? new Date();
-  const mutations: Mutation[] = newestFirst.map((event) => ({
-    entity: event.entity_type as MutableEntity,
-    action: "revert",
-    id: event.entity_id,
-    patch: revertPatch(event, now.toISOString()),
-    revertsEventId: event.id,
-  }));
-  if (!options.confirm) {
-    const conflicts = await findConflicts(db, newestFirst, ownIds);
-    if (conflicts.length > 0) throw new RevertConflictError(conflicts);
+  for (let attempt = 1; ; attempt++) {
+    const now = options.now ?? new Date();
+    const mutations: Mutation[] = newestFirst.map((event) => ({
+      entity: event.entity_type as MutableEntity,
+      action: "revert",
+      id: event.entity_id,
+      patch: revertPatch(event, now.toISOString()),
+      revertsEventId: event.id,
+    }));
+    const prelude: D1PreparedStatement[] = [];
+    if (!options.confirm) {
+      const checkedUpTo = await latestSeq(db);
+      const conflicts = await findConflicts(db, newestFirst, ownIds);
+      if (conflicts.length > 0) throw new RevertConflictError(conflicts);
+      prelude.push(noEventsSince(db, newestFirst, checkedUpTo));
+    }
+    // A change that lands after the check aborts the batch (the guard above,
+    // or mutate's own stale-row guard). Mutate must not retry on its own: it
+    // would read the new value and set it back without a warning. Instead the
+    // whole revert starts again, so the change shows up as a conflict.
+    try {
+      const results = await mutateMany(db, actor, mutations, { now, prelude, retryStale: false });
+      return { results, reverted: results.filter((r) => r.event !== null).length };
+    } catch (err) {
+      if (err instanceof StaleWriteError && attempt < MAX_REVERT_ATTEMPTS) continue;
+      throw err;
+    }
   }
-  const results = await mutateMany(db, actor, mutations, { now });
-  return { results, reverted: results.filter((r) => r.event !== null).length };
+}
+
+async function latestSeq(db: D1Database): Promise<number> {
+  return (await db.prepare(`SELECT COALESCE(MAX(seq), 0) AS seq FROM events`).first<number>("seq")) ?? 0;
+}
+
+/** Aborts the batch if any of the reverted items gained an event after `seq`. */
+function noEventsSince(db: D1Database, events: readonly PlannerEvent[], seq: number): D1PreparedStatement {
+  const keys = [...new Set(events.map((e) => `${e.entity_type}:${e.entity_id}`))];
+  return db
+    .prepare(
+      `INSERT INTO write_guard (expected, actual, reason)
+       SELECT 0, COUNT(*), 'stale' FROM events
+       WHERE seq > ? AND entity_type || ':' || entity_id IN (SELECT value FROM json_each(?))`,
+    )
+    .bind(seq, JSON.stringify(keys));
 }

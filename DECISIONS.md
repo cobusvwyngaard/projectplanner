@@ -70,6 +70,15 @@ at the bottom of each section.
   first, so it either fully applies or not at all.
 - **Only people can revert.** Claude has no revert tool and mutate refuses
   `revert` from any other actor.
+- **A revert never overwrites a change it did not check.** The conflict
+  check reads events before the batch, so the batch also carries a guard
+  that none of the reverted items gained an event since the check, and
+  mutate does not retry a stale guard for a revert (`retryStale: false`):
+  retrying would read the new value and set it back without a warning.
+  The whole revert starts again instead, conflict check included, up to
+  three times. A change to the same fields then shows as a conflict; a
+  change to other fields lets the revert go ahead; after three misses the
+  person gets "changed at the same moment, try again".
 
 ## Login, sessions and OAuth
 

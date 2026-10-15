@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { NotFoundError, ValidationError } from "../../src/worker/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "../../src/worker/lib/errors";
 import { claudeActor, humanActor } from "../../src/worker/mutate/actor";
 import { mutate } from "../../src/worker/mutate/index";
 import { RevertConflictError, revertEvent, revertRun } from "../../src/worker/mutate/revert";
@@ -155,5 +155,110 @@ describe("revert a whole run", () => {
 
   it("reports unknown runs", async () => {
     await expect(revertRun(db, human1, "missing")).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+/**
+ * The database with another person's change slipped in while a revert is
+ * under way: just before the revert's batch commits ("batch"), or between its
+ * conflict check and mutate reading the note ("read"). `times` limits how
+ * often it happens.
+ */
+function racingDb(at: "batch" | "read", interfere: () => Promise<unknown>, times = 1): D1Database {
+  let left = times;
+  const fire = async () => {
+    if (left <= 0) return;
+    left--;
+    await interfere();
+  };
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop === "batch" && at === "batch") {
+        return async (statements: D1PreparedStatement[]) => {
+          await fire();
+          return target.batch(statements);
+        };
+      }
+      if (prop === "prepare" && at === "read") {
+        return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!/ FROM notes WHERE id = \?$/.test(sql)) return statement;
+          return {
+            bind: (...values: unknown[]) => {
+              const bound = statement.bind(...values);
+              return {
+                first: async () => {
+                  await fire();
+                  return bound.first();
+                },
+              };
+            },
+          } as unknown as D1PreparedStatement;
+        };
+      }
+      const value: unknown = Reflect.get(target, prop);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+describe("revert while someone else is changing the same item", () => {
+  async function renamedNote() {
+    const { row } = await mutate(db, human1, { entity: "note", action: "create", values: { title: "A" } });
+    const id = String(row.id);
+    const change = await mutate(db, human1, { entity: "note", action: "update", id, patch: { title: "B" } });
+    return { id, eventId: String(change.event?.id) };
+  }
+
+  it("reports a rename committed just before the revert's batch as a conflict", async () => {
+    const { id, eventId } = await renamedNote();
+    const racing = racingDb("batch", () => mutate(db, human2, { entity: "note", action: "update", id, patch: { title: "C" } }));
+    const error = await revertEvent(racing, human1, eventId).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RevertConflictError);
+    expect((error as RevertConflictError).conflicts[0]).toMatchObject({ field: "title", later_event: { actor_user_id: USER_2 } });
+    expect(await title(id)).toBe("C");
+    expect((await eventsFor("note", id)).map((e) => e.action)).toEqual(["create", "update", "update"]);
+  });
+
+  it("reports a rename committed between the conflict check and the read as a conflict", async () => {
+    const { id, eventId } = await renamedNote();
+    const racing = racingDb("read", () => mutate(db, human2, { entity: "note", action: "update", id, patch: { title: "C" } }));
+    await expect(revertEvent(racing, human1, eventId)).rejects.toBeInstanceOf(RevertConflictError);
+    expect(await title(id)).toBe("C");
+  });
+
+  it("goes ahead when the change at the same moment touched other fields", async () => {
+    const { id, eventId } = await renamedNote();
+    const racing = racingDb("batch", () => mutate(db, human2, { entity: "note", action: "update", id, patch: { body: "Mine" } }));
+    const outcome = await revertEvent(racing, human1, eventId);
+    expect(outcome.reverted).toBe(1);
+    const row = await db.prepare("SELECT title, body FROM notes WHERE id = ?").bind(id).first();
+    expect(row).toEqual({ title: "A", body: "Mine" });
+  });
+
+  it("asks to try again after three attempts when changes keep arriving", async () => {
+    const { id, eventId } = await renamedNote();
+    let n = 0;
+    const racing = racingDb(
+      "batch",
+      () => mutate(db, human2, { entity: "note", action: "update", id, patch: { body: `Edit ${++n}` } }),
+      Number.POSITIVE_INFINITY,
+    );
+    const error = await revertEvent(racing, human1, eventId).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(error).not.toBeInstanceOf(RevertConflictError);
+    expect((error as ConflictError).message).toMatch(/at the same moment/);
+    expect(n).toBe(3);
+    expect(await title(id)).toBe("B");
+  });
+
+  it("reports a rename made during a whole-run revert as a conflict", async () => {
+    const { row } = await mutate(db, human1, { entity: "note", action: "create", values: { title: "A" } });
+    const id = String(row.id);
+    const runId = await openRun(USER_2);
+    await mutate(db, claudeActor(USER_2, runId), { entity: "note", action: "update", id, patch: { title: "B" } });
+    const racing = racingDb("batch", () => mutate(db, human2, { entity: "note", action: "update", id, patch: { title: "C" } }));
+    await expect(revertRun(racing, human1, runId)).rejects.toBeInstanceOf(RevertConflictError);
+    expect(await title(id)).toBe("C");
   });
 });

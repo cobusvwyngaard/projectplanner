@@ -37,6 +37,13 @@ export class ConflictError extends AppError {
   }
 }
 
+/** A write guard found that a row changed between reading and writing it. */
+export class StaleWriteError extends ConflictError {
+  constructor() {
+    super("Someone else changed this at the same moment. Please try again.");
+  }
+}
+
 /** A Claude write named a run that is missing, finished, expired or not this user's. */
 export class RunNotOpenError extends AppError {
   constructor(message = "The run is not open. Call start_run first and pass its run_id.") {

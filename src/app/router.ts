@@ -6,11 +6,12 @@ import { useSyncExternalStore, type MouseEvent } from "react";
 import type { ItemRef } from "../shared/types";
 import { itemKey } from "./lib/items";
 
-export type Route = "board" | "list" | "activity" | "settings";
+export type Route = "board" | "list" | "inbox" | "activity" | "settings";
 
 export const ROUTES: readonly { route: Route; path: string; label: string }[] = [
   { route: "board", path: "/board", label: "Board" },
   { route: "list", path: "/list", label: "List" },
+  { route: "inbox", path: "/inbox", label: "Inbox" },
   { route: "activity", path: "/activity", label: "Activity" },
   { route: "settings", path: "/settings", label: "Settings" },
 ];

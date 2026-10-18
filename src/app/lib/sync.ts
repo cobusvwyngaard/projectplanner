@@ -266,4 +266,14 @@ export class PlannerStore {
   setSettings(settings: SettingsMap): void {
     this.update((s) => ({ ...s, settings }));
   }
+
+  /** Merge one capture (from a mutation response) into the live map. */
+  putCapture(capture: import("../../shared/types").Capture): void {
+    this.update((s) => {
+      if (s.captures.get(capture.id) === capture) return s;
+      const captures = new Map(s.captures);
+      captures.set(capture.id, capture);
+      return { ...s, captures };
+    });
+  }
 }

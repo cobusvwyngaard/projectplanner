@@ -1,7 +1,7 @@
 // Small builders for the app's unit tests. Names and texts are made up.
 
 import type { BootstrapResponse, ChangesResponse } from "../../src/shared/api";
-import type { Label, Link, NoteView, PlannerEvent, TaskView, User } from "../../src/shared/types";
+import type { Capture, Label, Link, NoteView, PlannerEvent, TaskView, User } from "../../src/shared/types";
 
 export const T0 = "2026-10-14T06:00:00.000Z";
 
@@ -51,6 +51,29 @@ export function label(over: Partial<Label> & { id: string }): Label {
 
 export function link(over: Partial<Link> & { id: string }): Link {
   return { a_type: "note", a_id: "N1", b_type: "task", b_id: "T1", created_at: T0, archived_at: null, ...over };
+}
+
+export function capture(over: Partial<Capture> & { id: string }): Capture {
+  return {
+    kind: "text",
+    author_user_id: ME.id,
+    r2_key: null,
+    mime: null,
+    duration_s: null,
+    text: `Capture ${over.id}`,
+    transcript_status: "n/a",
+    transcript_error: null,
+    transcribe_attempts: 0,
+    transcribe_next_at: null,
+    inbox_status: "new",
+    claimed_by_run_id: null,
+    claimed_at: null,
+    processed_by_run_id: null,
+    processed_at: null,
+    processing_note: null,
+    created_at: T0,
+    ...over,
+  };
 }
 
 export function event(over: Partial<PlannerEvent> & { seq: number }): PlannerEvent {

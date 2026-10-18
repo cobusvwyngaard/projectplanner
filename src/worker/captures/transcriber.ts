@@ -17,7 +17,7 @@ export interface Transcriber {
   transcribe(input: TranscribeInput): Promise<TranscribeResult>;
 }
 
-const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\;]/;
+const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\]/;
 
 /** Sanitise keyterms per the ElevenLabs contract. */
 export function sanitiseKeyterms(terms: readonly string[]): string[] {
@@ -37,7 +37,7 @@ export function sanitiseKeyterms(terms: readonly string[]): string[] {
 const AUTH_MESSAGE = "ElevenLabs refused the API key (401). Check ELEVENLABS_API_KEY.";
 
 export class ElevenLabsTranscriber implements Transcriber {
-  constructor(private readonly env: AppEnv) {}
+  constructor(private readonly env: Pick<AppEnv, "ELEVENLABS_API_KEY" | "TRANSCRIBER">) {}
 
   async transcribe(input: TranscribeInput): Promise<TranscribeResult> {
     const key = this.env.ELEVENLABS_API_KEY?.trim() ?? "";
@@ -111,7 +111,7 @@ export class MockTranscriber implements Transcriber {
   }
 }
 
-export function transcriberFor(env: AppEnv): Transcriber {
+export function transcriberFor(env: Pick<AppEnv, "ELEVENLABS_API_KEY" | "TRANSCRIBER">): Transcriber {
   if (env.TRANSCRIBER === "mock") return new MockTranscriber();
   return new ElevenLabsTranscriber(env);
 }

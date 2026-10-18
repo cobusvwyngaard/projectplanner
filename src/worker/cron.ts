@@ -5,12 +5,12 @@ import { transcribeCapture } from "./captures/transcribe";
 import type { AppEnv } from "./env";
 
 /** Housekeeping run by the cron trigger: drop expired OAuth records. */
-export async function runScheduled(env: Env): Promise<void> {
+export async function runScheduled(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLABS_API_KEY" | "TRANSCRIBER">): Promise<void> {
   await purgeExpired(env.DB);
-  await retryTranscriptions(env as unknown as AppEnv, new Date());
+  await retryTranscriptions(env, new Date());
 }
 
-async function retryTranscriptions(env: AppEnv, now: Date): Promise<void> {
+async function retryTranscriptions(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLABS_API_KEY" | "TRANSCRIBER">, now: Date): Promise<void> {
   const nowIso = now.toISOString();
   const { results } = await env.DB
     .prepare(

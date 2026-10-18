@@ -57,7 +57,9 @@ export const securityHeaders: MiddlewareHandler<AppBindings> = async (c, next) =
   if (url.protocol === "https:" && !isLoopbackHostname(url.hostname)) {
     res.headers.set("Strict-Transport-Security", STRICT_TRANSPORT_SECURITY);
   }
-  if (!/^\/api\/captures\/[^/]+\/audio$/.test(c.req.path)) {
+  const isAudio = /^\/api\/captures\/[^/]+\/audio$/.test(c.req.path);
+  const successAudio = isAudio && (res.status === 200 || res.status === 206);
+  if (!successAudio) {
     res.headers.set("Cache-Control", cacheControl(c.req.path, res.status));
   }
   // Clear first: assigning over an existing response copies its headers back in.

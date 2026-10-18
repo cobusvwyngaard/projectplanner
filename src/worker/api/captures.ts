@@ -1,14 +1,14 @@
 // /api/captures: upload, list, detail, edit, retry and audio streaming.
 
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { z } from "zod";
 import { ENTITIES } from "../mutate/entities";
 import type { AppBindings } from "../env";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../lib/errors";
 import { jsonBody } from "../lib/http";
-import { queryParams } from "./request";
 import { mutate } from "../mutate/index";
-import { actorOf, mutationResponse } from "./request";
+import { actorOf, mutationResponse, queryParams } from "./request";
 import { captureKey } from "../captures/storage";
 import { transcribeCapture } from "../captures/transcribe";
 import { reset as resetLease } from "../captures/lease";
@@ -24,7 +24,7 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_TEXT = 20000;
 
 const updateCapture = z.strictObject({
-  text: z.string().optional(),
+  text: z.string().max(20000).optional(),
   inbox_status: z.enum(["new", "ignored", "processed"]).optional(),
   processing_note: z.string().max(500).nullable().optional(),
 });
@@ -176,11 +176,10 @@ export const capturesRouter = new Hono<AppBindings>()
     if (!isMock && key === "") problem = "missing_key";
     if (problem === null) {
       const authMsg = "ElevenLabs refused the API key (401). Check ELEVENLABS_API_KEY.";
-      const bad = await db
-        .prepare(`SELECT 1 FROM captures WHERE transcript_status = 'failed' AND transcript_error = ? AND transcribe_attempts > 0 ORDER BY created_at DESC LIMIT 1`)
-        .bind(authMsg)
-        .first();
-      if (bad) problem = "bad_key";
+      const latest = await db
+        .prepare(`SELECT transcript_error FROM captures WHERE transcript_status IN ('done','failed') ORDER BY created_at DESC, id DESC LIMIT 1`)
+        .first<{ transcript_error: string | null }>();
+      if (latest && latest.transcript_error === authMsg) problem = "bad_key";
     }
 
     const next = more ? (captures[captures.length - 1]?.created_at ?? null) : null;
@@ -289,9 +288,9 @@ export const capturesRouter = new Hono<AppBindings>()
     return streamAudio(c, true);
   });
 
-async function streamAudio(c: any, headOnly: boolean): Promise<Response> {
+async function streamAudio(c: Context<AppBindings>, headOnly: boolean): Promise<Response> {
   const db = c.env.DB;
-  const id = c.req.param("id");
+  const id = c.req.param("id") ?? "";
   const capture = await loadCapture(db, id);
   if (!capture || !capture.r2_key || (capture.kind !== "voice" && capture.kind !== "file")) {
     throw new NotFoundError("No audio for this capture.");
@@ -301,7 +300,7 @@ async function streamAudio(c: any, headOnly: boolean): Promise<Response> {
   if (!headObj) throw new NotFoundError("No audio for this capture.");
   const size = headObj.size;
   const mime = capture.mime ?? headObj.httpMetadata?.contentType ?? "application/octet-stream";
-  const etag = headObj.httpEtag ?? `"${headObj.etag}"`;
+  const etag = headObj.httpEtag ?? '"' + headObj.etag + '"';
 
   const headers = new Headers();
   headers.set("Content-Type", mime);
@@ -310,94 +309,71 @@ async function streamAudio(c: any, headOnly: boolean): Promise<Response> {
   headers.set("Content-Disposition", "inline");
   headers.set("Cache-Control", "private, max-age=3600");
 
+  async function fullFile(): Promise<Response> {
+    const obj = await c.env.AUDIO.get(key);
+    if (!obj) throw new NotFoundError("No audio for this capture.");
+    const h = new Headers(headers);
+    h.set("Content-Length", String(size));
+    return new Response(obj.body, { status: 200, headers: h });
+  }
+
   if (headOnly) {
     headers.set("Content-Length", String(size));
     return new Response(null, { status: 200, headers });
   }
 
   const rangeHeader = c.req.header("range");
-  if (!rangeHeader) {
-    const obj = await c.env.AUDIO.get(key);
-    if (!obj) throw new NotFoundError("No audio for this capture.");
-    headers.set("Content-Length", String(size));
-    return new Response(obj.body, { status: 200, headers });
-  }
+  if (!rangeHeader) return fullFile();
 
-  // parse single range
   const trimmed = rangeHeader.trim();
-  if (!trimmed.toLowerCase().startsWith("bytes=")) {
-    const obj = await c.env.AUDIO.get(key);
-    if (!obj) throw new NotFoundError("No audio for this capture.");
-    headers.set("Content-Length", String(size));
-    return new Response(obj.body, { status: 200, headers });
-  }
+  if (!trimmed.toLowerCase().startsWith("bytes=")) return fullFile();
   const spec = trimmed.slice(6).trim();
-  if (spec.includes(",")) {
-    const obj = await c.env.AUDIO.get(key);
-    if (!obj) throw new NotFoundError("No audio for this capture.");
-    headers.set("Content-Length", String(size));
-    return new Response(obj.body, { status: 200, headers });
-  }
+  if (spec.includes(",")) return fullFile();
   const m = /^(\d*)-(\d*)$/.exec(spec);
-  if (!m) {
-    const obj = await c.env.AUDIO.get(key);
-    if (!obj) throw new NotFoundError("No audio for this capture.");
-    headers.set("Content-Length", String(size));
-    return new Response(obj.body, { status: 200, headers });
-  }
+  if (!m) return fullFile();
   const aStr = m[1] ?? "";
   const bStr = m[2] ?? "";
+  if (aStr === "" && bStr === "") return fullFile();
+
   let start: number;
   let end: number;
-  if (aStr === "" && bStr === "") {
-    // invalid
-    const obj = await c.env.AUDIO.get(key);
-    if (!obj) throw new NotFoundError("No audio for this capture.");
-    headers.set("Content-Length", String(size));
-    return new Response(obj.body, { status: 200, headers });
-  }
   if (aStr === "") {
-    // suffix
     const n = Number(bStr);
     if (!Number.isFinite(n) || n <= 0) {
-      headers.set("Content-Range", `bytes */${size}`);
+      headers.set("Content-Range", "bytes */" + size);
       return new Response(null, { status: 416, headers });
     }
     start = Math.max(0, size - n);
     end = size - 1;
   } else {
     start = Number(aStr);
-    if (bStr === "") {
-      end = size - 1;
-    } else {
-      end = Number(bStr);
+    end = bStr === "" ? size - 1 : Number(bStr);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return fullFile();
+    if (start < 0 || start >= size) {
+      headers.set("Content-Range", "bytes */" + size);
+      return new Response(null, { status: 416, headers });
     }
-    if (!Number.isFinite(start) || !Number.isFinite(end)) {
-      const obj = await c.env.AUDIO.get(key);
-      if (!obj) throw new NotFoundError("No audio for this capture.");
-      headers.set("Content-Length", String(size));
-      return new Response(obj.body, { status: 200, headers });
-    }
-    if (start > end || start >= size || end >= size || start < 0 || end < 0) {
-      headers.set("Content-Range", `bytes */${size}`);
+    if (end >= size) end = size - 1;
+    if (start > end) {
+      headers.set("Content-Range", "bytes */" + size);
       return new Response(null, { status: 416, headers });
     }
   }
-  // suffix n larger than size handled by max; validate start
   if (start < 0 || start >= size) {
-    headers.set("Content-Range", `bytes */${size}`);
+    headers.set("Content-Range", "bytes */" + size);
     return new Response(null, { status: 416, headers });
   }
   if (end >= size) end = size - 1;
   if (start > end) {
-    headers.set("Content-Range", `bytes */${size}`);
+    headers.set("Content-Range", "bytes */" + size);
     return new Response(null, { status: 416, headers });
   }
 
   const length = end - start + 1;
   const obj = await c.env.AUDIO.get(key, { range: { offset: start, length } });
   if (!obj) throw new NotFoundError("No audio for this capture.");
-  headers.set("Content-Range", `bytes ${start}-${end}/${size}`);
-  headers.set("Content-Length", String(length));
-  return new Response(obj.body, { status: 206, headers });
+  const h = new Headers(headers);
+  h.set("Content-Range", "bytes " + start + "-" + end + "/" + size);
+  h.set("Content-Length", String(length));
+  return new Response(obj.body, { status: 206, headers: h });
 }

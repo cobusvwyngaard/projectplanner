@@ -1,6 +1,7 @@
 // One transcription attempt for a capture. Safe to call from waitUntil and cron.
 
 import { mutate } from "../mutate/index";
+import { ConflictError } from "../lib/errors";
 import { SYSTEM_ACTOR } from "../mutate/actor";
 
 import { transcriberFor } from "./transcriber";
@@ -12,7 +13,7 @@ const AUTH_ERROR = "ElevenLabs refused the API key (401). Check ELEVENLABS_API_K
 const RETRY_ERROR = "Transcription failed for now; it will be retried.";
 const MISSING_ERROR = "The recording could not be found.";
 
-export async function transcribeCapture(env: AppEnv, id: string, now: Date = new Date()): Promise<void> {
+export async function transcribeCapture(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLABS_API_KEY" | "TRANSCRIBER">, id: string, now: Date = new Date()): Promise<void> {
   const db = env.DB;
   try {
     const row = await db
@@ -52,6 +53,7 @@ export async function transcribeCapture(env: AppEnv, id: string, now: Date = new
         action: "update",
         id,
         patch: { transcript_status: "failed", transcript_error: MISSING_ERROR },
+        expect: { text: row.text, transcript_status: row.transcript_status },
       });
       return;
     }
@@ -63,6 +65,7 @@ export async function transcribeCapture(env: AppEnv, id: string, now: Date = new
         action: "update",
         id,
         patch: { transcript_status: "failed", transcript_error: MISSING_ERROR },
+        expect: { text: row.text, transcript_status: row.transcript_status },
       });
       return;
     }
@@ -82,15 +85,15 @@ export async function transcribeCapture(env: AppEnv, id: string, now: Date = new
 
     if (result.ok) {
       const patch: Record<string, string | number | null> = {
-        text: result.text,
         transcript_json: result.json,
         transcript_status: "done",
         transcript_error: null,
       };
+      if (row.text === null) patch.text = result.text;
       if (durationS === null && result.durationSecs !== null) {
         patch.duration_s = result.durationSecs;
       }
-      await mutate(db, SYSTEM_ACTOR, { entity: "capture", action: "update", id, patch });
+      await mutate(db, SYSTEM_ACTOR, { entity: "capture", action: "update", id, patch, expect: { text: row.text, transcript_status: row.transcript_status } });
       return;
     }
 
@@ -100,6 +103,7 @@ export async function transcribeCapture(env: AppEnv, id: string, now: Date = new
         action: "update",
         id,
         patch: { transcript_status: "failed", transcript_error: AUTH_ERROR },
+        expect: { text: row.text, transcript_status: row.transcript_status },
       });
       return;
     }
@@ -110,6 +114,7 @@ export async function transcribeCapture(env: AppEnv, id: string, now: Date = new
         action: "update",
         id,
         patch: { transcript_status: "failed", transcript_error: result.message },
+        expect: { text: row.text, transcript_status: row.transcript_status },
       });
       return;
     }
@@ -121,10 +126,12 @@ export async function transcribeCapture(env: AppEnv, id: string, now: Date = new
       action: "update",
       id,
       patch: { transcript_status: status, transcript_error: RETRY_ERROR },
+      expect: { text: row.text, transcript_status: row.transcript_status },
     });
     const backoffMs = 10 * 60_000 * Math.pow(2, attempts - 1);
     await backoff(db, id, new Date(now.getTime() + backoffMs));
   } catch (err) {
+    if (err instanceof ConflictError) return;
     const e = err instanceof Error ? err : new Error(String(err));
     console.error(`transcribeCapture ${id} failed: ${e.name}: ${e.message}`);
   }

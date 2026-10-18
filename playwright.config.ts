@@ -28,7 +28,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "sh scripts/e2e-server.sh",
+    command: "node scripts/e2e-server.mjs",
     url: "http://localhost:8788/login",
     reuseExistingServer: false,
     timeout: 180_000,

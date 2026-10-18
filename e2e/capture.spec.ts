@@ -37,17 +37,26 @@ test("edit a transcript and keep it after a reload", async ({ page }) => {
   await expect(page.getByText("Saved to the Inbox")).toBeVisible();
 
   await page.goto("/inbox");
-  const card = page.locator(".capture-card").filter({ hasText: text });
-  await expect(card).toBeVisible();
+  // Wait for the card under its original text, then switch to a locator that
+  // survives the edit: each card carries its capture id.
+  const original = page.locator(".capture-card").filter({ hasText: text });
+  await expect(original).toBeVisible();
+  const captureId = await original.getAttribute("data-capture-id");
+  expect(captureId).toBeTruthy();
+  const card = page.locator(`.capture-card[data-capture-id="${captureId}"]`);
   const edited = `Edited transcript ${Date.now().toString(36)}`;
   const area = card.locator("textarea");
   await area.fill(edited);
+  const saved = page.waitForResponse(
+    (r) => r.request().method() === "PATCH" && r.url().includes("/api/captures"),
+  );
   await card.getByRole("button", { name: "Save" }).click();
+  await saved;
   await expect(area).toHaveValue(edited);
   await page.reload();
-  await expect(page.locator(".capture-card").first().locator("textarea")).toHaveValue(edited, {
-    timeout: 10_000,
-  });
+  await expect(
+    page.locator(`.capture-card[data-capture-id="${captureId}"] textarea`),
+  ).toHaveValue(edited, { timeout: 10_000 });
 });
 
 test("upload a small WAV built in code", async ({ page }) => {

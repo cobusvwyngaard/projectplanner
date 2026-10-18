@@ -266,7 +266,7 @@ function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, o
       Date.now() - new Date(capture.created_at).getTime() > 10 * 60 * 1000);
 
   return (
-    <li className="capture-card">
+    <li className="capture-card" data-capture-id={capture.id}>
       <div className="capture-card-head">
         <span className="capture-author">{author}</span>
         <TimeAgo ts={capture.created_at} />

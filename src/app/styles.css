@@ -1898,7 +1898,18 @@ fieldset:disabled .chip-option {
   }
 
   .page {
-    padding: 16px 16px 72px;
+    padding: 16px 16px 24px;
+  }
+
+  /* Room at the foot of every scrolling view for the raised Record button in
+     the tab bar, so the last card's buttons can be scrolled clear of it. */
+  .app-main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  /* Keep the inbox filter on one line at 390px. */
+  .inbox .segment {
+    padding: 5px 9px;
   }
 
   .panel {

@@ -54,7 +54,7 @@ export function fromBootstrap(boot: BootstrapResponse): PlannerState {
     notes: byId(boot.notes.filter((n) => n.archived_at === null)),
     tasks: byId(boot.tasks.filter((t) => t.archived_at === null)),
     links: byId(boot.links.filter((l) => l.archived_at === null)),
-    captures: byId(boot.captures ?? []),
+    captures: new Map(),
     settings: boot.settings,
     cursor: boot.cursor,
     today: boot.today,

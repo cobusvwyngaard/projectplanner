@@ -50,8 +50,6 @@ export interface BootstrapResponse {
   tasks: TaskView[];
   /** Links that are not archived */
   links: Link[];
-  /** Captures, if the server sends them (phase 2 feeds them through the change feed) */
-  captures?: Capture[];
   settings: SettingsMap;
   /** Id of the newest event; pass to /api/changes as `since` */
   cursor: Id | null;

@@ -302,6 +302,7 @@ Never invent dates or owners.
 - Accept when:
   - a second planner is deployed from the same code with its own resources, address, phrases and connector, and shares no data with the first;
   - a planner with three or more people works throughout (sign-in, assignment, lists, email matching, Claude);
+  - an admin can add, deactivate and reset the phrase of a person entirely in the app, each action appears in Activity, and no phrase or hash is ever shown or logged;
   - one command deploys a code update to every planner and applies its migrations.
 
 ## 10. Items to verify during the build (do not assume)
@@ -344,10 +345,16 @@ The owner wants to run more than one planner, each with its own people. The curr
 - Deployments are configured with wrangler environments (one per planner) or one config file per planner; resource names include the planner's name. A script deploys an update to all planners and applies each one's migrations.
 - A multi-tenant design (one database holding many planners) was considered and rejected for now: it would touch nearly every query, the mutation path, events, revert and the Claude tools, for no benefit at a handful of planners.
 
-### 12.2 Any number of people per planner
-- Users are no longer fixed at two. Each user has a login phrase; the phrase-to-user mapping is configuration (for example a `LOGIN_PHRASES` secret holding one phrase per user id, or one secret per user), never code. All rules of section 3 still apply to every phrase.
-- Views that assume one "other person" generalise: List view tabs become Mine / Everyone / Unassigned / Overdue / This week / Done with a person filter; assignee pickers list all users.
+### 12.2 Any number of people per planner, managed by an admin
+- Users are no longer fixed at two, and they are managed in the app, not as Cloudflare secrets.
+- Each planner has at least one **admin**. Settings → Admin lets an admin: add a person (display name, initials, email addresses); deactivate a person (they can no longer sign in; nothing is deleted; their items and history stay); set or reset a person's phrase (type one, or generate a random phrase that is shown once); sign a person out everywhere; disconnect a person's Claude connection; make another person admin (at least one admin must remain).
+- Every person can change their own phrase after entering the current one.
+- Phrases are stored in D1 only as a salted, deliberately slow hash (PBKDF2-SHA-256 via WebCrypto, or stronger; parameters recorded in DECISIONS.md). Phrases are never stored, logged or shown again after being set. Sign-in compares against every active user's hash in constant time, keeps the rate limiting and generic error of section 3.3, and still requires phrases to be unique after normalisation.
+- First run of a new planner: a single Worker secret `ADMIN_SETUP_PHRASE` signs in once as the first admin, who must then set a real phrase; the setup phrase stops working as soon as any admin has a phrase. Upgrading the existing planner carries `LOGIN_PHRASE_1/2` over to users 1 and 2 (user 1 becomes admin), after which those secrets can be removed.
+- Admin actions are events (actor_kind 'human') and appear in Activity; they never contain phrases or hashes.
+- Cost note: a properly slow hash needs more CPU than the Workers Free plan allows per request (10 ms); Phase 6 assumes the Workers Paid plan.
+- Views that assume one "other person" generalise: List view tabs become Mine / Everyone / Unassigned / Overdue / This week / Done with a person filter; assignee pickers list all active users.
 - Until Phase 6, the build keeps two users, but new code (Phases 3 to 5) must not add new assumptions that there are exactly two: work from the users table, not from "the other person".
 
-### 12.3 This changes section 1
-Section 1 says "Two users only". That stays true for each planner until Phase 6; Phase 6 lifts it, at the owner's request.
+### 12.3 This changes sections 1 and 3
+Section 1 says "Two users only" and section 3.1 stores phrases as Worker secrets. Both stay true until Phase 6; Phase 6 replaces them, at the owner's request, with admin-managed users whose phrases are stored as slow hashes in D1.

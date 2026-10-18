@@ -18,7 +18,7 @@ export interface ApiResult<T> {
 type Method = "GET" | "POST" | "PATCH" | "PUT";
 
 export class TestApi {
-  private readonly app = new Hono<AppBindings>();
+  readonly app = new Hono<AppBindings>();
 
   constructor(readonly userId: string) {
     this.app.use(async (c, next) => {
@@ -38,11 +38,28 @@ export class TestApi {
   async send<T = unknown>(method: Method, path: string, body?: unknown): Promise<ApiResult<T>> {
     const init: RequestInit = { method };
     if (body !== undefined) {
-      init.body = typeof body === "string" ? body : JSON.stringify(body);
-      init.headers = { "content-type": "application/json" };
+      if (body instanceof FormData) {
+        init.body = body;
+      } else if (typeof body === "string") {
+        init.body = body;
+        init.headers = { "content-type": "application/json" };
+      } else {
+        init.body = JSON.stringify(body);
+        init.headers = { "content-type": "application/json" };
+      }
     }
-    const res = await this.app.request(path, init, env);
+    const pending: Promise<unknown>[] = [];
+    const executionCtx = {
+      waitUntil: (p: Promise<unknown>) => {
+        pending.push(Promise.resolve(p));
+      },
+      passThroughOnException: () => {},
+    } as ExecutionContext;
+    const res = await this.app.request(path, init, env, executionCtx);
     const text = await res.text();
+    if (pending.length > 0) {
+      await Promise.allSettled(pending);
+    }
     return { status: res.status, body: (text === "" ? null : JSON.parse(text)) as T };
   }
 

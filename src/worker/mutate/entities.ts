@@ -107,7 +107,7 @@ export const ENTITIES: Readonly<Record<MutableEntity, EntitySpec>> = {
       ],
       system: [
         "text", "transcript_json", "transcript_status", "transcript_error",
-        "inbox_status", "claimed_by_run_id", "claimed_at",
+        "duration_s", "inbox_status", "claimed_by_run_id", "claimed_at",
       ],
     },
     defaults: {

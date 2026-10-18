@@ -166,10 +166,19 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
+      // Some browsers only render a graph that reaches the destination. A muted
+      // gain node keeps the analyser fed without playing the microphone back.
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+      analyser.connect(mute);
+      mute.connect(ctx.destination);
       analyserRef.current = analyser;
+      // Chromium starts a fresh context suspended until a gesture allows it.
+      if (ctx.state === "suspended") void ctx.resume().catch(() => {});
       const data = new Uint8Array(analyser.frequencyBinCount);
       const tick = () => {
         if (!analyserRef.current) return;
+        if (ctx.state === "suspended") void ctx.resume().catch(() => {});
         analyserRef.current.getByteTimeDomainData(data);
         let sum = 0;
         for (let i = 0; i < data.length; i++) {
@@ -199,6 +208,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
     recorder.onstop = () => {
       stopTracks();
       setRecording(false);
+      setLevel(0);
       if (discardRef.current) {
         // Cancelled: the chunks were dropped with the recording.
         discardRef.current = false;
@@ -378,7 +388,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
             {recording && (
               <>
                 <div className="record-timer" aria-live="polite">{formatDuration(elapsed)}</div>
-                <div className="level-meter" aria-hidden="true">
+                <div className="level-meter" aria-hidden="true" data-level={Math.round(level * 100)}>
                   <div className="level-bar" style={{ width: `${Math.round(level * 100)}%` }} />
                 </div>
                 <div className="button-row">

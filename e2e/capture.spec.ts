@@ -15,6 +15,12 @@ test("record about two seconds, stop and save, and see the transcript", async ({
   await recordButton(page).click();
   const timer = page.locator(".record-timer");
   await expect(timer).toBeVisible();
+  // Chromium's fake microphone plays a tone, so the level meter must move.
+  const meter = page.locator(".level-meter");
+  await expect(meter).toBeVisible();
+  await expect
+    .poll(async () => Number(await meter.getAttribute("data-level")), { timeout: 15_000 })
+    .toBeGreaterThan(0);
   await page.waitForTimeout(2000);
   await page.getByRole("button", { name: "Stop and save" }).click();
   await expect(page.getByText("Saved to the Inbox")).toBeVisible({ timeout: 30_000 });

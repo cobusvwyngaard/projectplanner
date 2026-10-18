@@ -12,6 +12,10 @@ docs/architecture.md says where code lives. Read only the parts your task needs.
   `main`; the project manager reviews and merges.
 - Small commits with clear messages. Push with `git push -u origin <branch>`.
 - Stop and report if a command fails twice. Do not guess around errors.
+- Never run `git reset --hard`, `git push --force`, `git rebase` or delete
+  branches or files you did not create. If git refuses something, stop and
+  report it.
+- If `npm`/`npx` are missing, stop: tests and builds cannot be checked.
 - Never deploy (`wrangler deploy`, `npm run deploy`) unless the task says so.
   Deploys happen when `main` changes.
 

@@ -331,3 +331,11 @@ at the bottom of each section.
 - **Smoke tests** run `wrangler dev` on port 8788 with a fresh database in
   `.wrangler/e2e` (`scripts/e2e-server.sh`) and sign in with the phrases
   from `.dev.vars`; see `e2e/README.md`.
+
+## Capture and transcription
+
+- **duration_s is writable by the system actor.** The ElevenLabs response may carry `audio_duration_secs`; when a capture has no browser-measured duration, the transcription result writes it through `mutate()` as `SYSTEM_ACTOR`, so `duration_s` was added to the capture's `system` writable list in `entities.ts`.
+- **Cache-Control for audio.** `src/worker/auth/headers.ts` skips overwriting `Cache-Control` for `/api/captures/:id/audio` so the route's `private, max-age=3600` survives; all other paths keep `no-store`/etc.
+- **Multipart uploads in tests.** `TestApi.send` now accepts `FormData` bodies and awaits `waitUntil` promises before returning, so transcription completes within a request in worker tests.
+- **Extension mapping.** `video/webm` and `video/mp4` (allowed uploads) map to `webm`/`m4a` alongside their audio counterparts; unknown MIME types fall back to `bin`.
+- **Lease timing.** `acquire` stamps `transcribe_next_at` 15 minutes ahead; `backoff` uses 10 min x 2^(attempts-1). Permanent failures leave the lease timestamp in place.

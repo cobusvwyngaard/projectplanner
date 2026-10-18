@@ -36,7 +36,11 @@ const TABS: readonly { id: ActivityTab; label: string }[] = [
 
 export function ActivityView() {
   const [tab, setTab] = useState<ActivityTab>("changes");
-  const [filters, setFilters] = useState<ActivityFilters>(NO_FILTERS);
+  const [filters, setFilters] = useState<ActivityFilters>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const run = params.get("run") ?? params.get("run_id");
+    return run ? { ...NO_FILTERS, runId: run } : NO_FILTERS;
+  });
 
   const showRun = useCallback((runId: Id) => {
     setFilters({ ...NO_FILTERS, runId });

@@ -4,7 +4,7 @@
 // It has no DOM or React code; src/app/store.ts wires it to the browser.
 
 import type { BootstrapResponse, ChangesResponse, MutationResponse } from "../../shared/api";
-import type { Id, Label, LocalDate, SettingsMap } from "../../shared/types";
+import type { Capture, Id, Label, LocalDate, SettingsMap } from "../../shared/types";
 import { ApiError, errorMessage } from "../api";
 import {
   applyChanges,
@@ -265,5 +265,15 @@ export class PlannerStore {
 
   setSettings(settings: SettingsMap): void {
     this.update((s) => ({ ...s, settings }));
+  }
+
+  /** Merge one capture (from a mutation response) into the live map. */
+  putCapture(capture: Capture): void {
+    this.update((s) => {
+      if (s.captures.get(capture.id) === capture) return s;
+      const captures = new Map(s.captures);
+      captures.set(capture.id, capture);
+      return { ...s, captures };
+    });
   }
 }

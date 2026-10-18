@@ -4,7 +4,7 @@
 
 import type { BootstrapResponse, ChangesResponse, MutationResponse } from "../../shared/api";
 import { addDays, daysBetween } from "../../shared/dates";
-import type { Id, Label, Link, LocalDate, NoteView, SettingsMap, TaskView, User } from "../../shared/types";
+import type { Capture, Id, Label, Link, LocalDate, NoteView, SettingsMap, TaskView, User } from "../../shared/types";
 
 export interface RowTypes {
   note: NoteView;
@@ -24,6 +24,7 @@ export interface PlannerState {
   notes: ReadonlyMap<Id, NoteView>;
   tasks: ReadonlyMap<Id, TaskView>;
   links: ReadonlyMap<Id, Link>;
+  captures: ReadonlyMap<Id, Capture>;
   settings: SettingsMap;
   /** Newest event seen through bootstrap or the change feed */
   cursor: Id | null;
@@ -53,6 +54,7 @@ export function fromBootstrap(boot: BootstrapResponse): PlannerState {
     notes: byId(boot.notes.filter((n) => n.archived_at === null)),
     tasks: byId(boot.tasks.filter((t) => t.archived_at === null)),
     links: byId(boot.links.filter((l) => l.archived_at === null)),
+    captures: new Map(),
     settings: boot.settings,
     cursor: boot.cursor,
     today: boot.today,
@@ -196,6 +198,16 @@ export function applyChanges(state: PlannerState, changes: ChangesResponse): Pla
   apply("note", changes.notes);
   apply("task", changes.tasks);
   apply("link", changes.links);
+  // Captures are not optimistic board rows, but the change feed carries their
+  // current state, so the Inbox can update without reloading.
+  let captures: Map<Id, Capture> | null = null;
+  for (const row of changes.captures) {
+    const base = captures ?? state.captures;
+    if (base.get(row.id) === row) continue;
+    if (!captures) captures = new Map(state.captures);
+    captures.set(row.id, row);
+  }
+  if (captures) next.captures = captures;
   if (changes.settings) next.settings = changes.settings;
   next.seen = seen;
   next.held = held;

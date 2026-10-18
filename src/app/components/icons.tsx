@@ -116,3 +116,10 @@ export const TaskIcon = () => (
     <path d="M8.5 12l2.5 2.5 4.5-5" />
   </Icon>
 );
+
+export const InboxIcon = () => (
+  <Icon>
+    <path d="M4 12l2.5-7.5h11L20 12v6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z" />
+    <path d="M4 12h4.5l1.5 2.5h4l1.5-2.5H20" />
+  </Icon>
+);

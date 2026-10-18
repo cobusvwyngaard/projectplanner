@@ -5,12 +5,13 @@
 import { useState, type ReactNode } from "react";
 import type { RevertConflictView, RevertResponse } from "../../shared/api";
 import type { Capture, Id, ItemRef, PlannerEvent, Run } from "../../shared/types";
-import { api, captureAudioUrl, revertConflicts } from "../api";
+import { api, revertConflicts } from "../api";
 import { describeEvent, fieldLabel, type DescribeContext, type FieldChange } from "../lib/events";
 import { followLink, itemHref, openItem } from "../router";
 import { store } from "../store";
 import { reportError, showToast } from "../toast";
 import { TimeAgo } from "./ui";
+import { CaptureAudio } from "../capture/AudioPlayer";
 
 export function ChangeList({ changes }: { changes: readonly FieldChange[] }) {
   if (changes.length === 0) return null;
@@ -98,11 +99,7 @@ function CaptureView({ capture, ctx }: { capture: Capture; ctx: DescribeContext 
           {capture.transcript_status === "pending" ? "Transcription in progress." : "No transcript."}
         </p>
       )}
-      {capture.r2_key && (
-        <audio controls preload="none" src={captureAudioUrl(capture.id)}>
-          Your browser cannot play this recording.
-        </audio>
-      )}
+      {capture.r2_key && <CaptureAudio captureId={capture.id} />}
     </figure>
   );
 }

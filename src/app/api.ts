@@ -5,6 +5,8 @@
 import type {
   ApiErrorBody,
   BootstrapResponse,
+  CaptureDetailResponse,
+  CapturesResponse,
   ChangesResponse,
   CreateLabelRequest,
   CreateLinkRequest,
@@ -22,10 +24,12 @@ import type {
   UpdateLabelRequest,
   UpdateNoteRequest,
   UpdateTaskRequest,
+  UpdateCaptureRequest,
   UpdateUserRequest,
 } from "../shared/api";
 import type {
   ActorKind,
+  Capture,
   EntityType,
   Id,
   Label,
@@ -123,6 +127,47 @@ async function request<T>(method: Method, path: string, options: RequestOptions 
 
 const seg = encodeURIComponent;
 
+/** Upload a multipart capture with XHR so progress can be reported. */
+function uploadCapture(form: FormData, onProgress?: (progress: number) => void): Promise<MutationResponse<Capture>> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/captures");
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("Accept", "application/json");
+    if (xhr.upload) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+    }
+    xhr.onload = () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        // Not JSON.
+      }
+      if (xhr.status === 401) {
+        window.location.assign(loginUrl(window.location));
+        reject(new ApiError(401, "signed_out", "Your session has ended. Please sign in again."));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as MutationResponse<Capture>);
+        return;
+      }
+      if (isErrorBody(body)) {
+        reject(new ApiError(xhr.status, body.error.code, body.error.message, body.error.details));
+        return;
+      }
+      reject(new ApiError(xhr.status, "http_error", `The planner answered with an error (${xhr.status}). Please try again.`));
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network_error", "Could not reach the planner. Check your connection and try again."));
+    xhr.send(form);
+  });
+}
+
 /** Filters of GET /api/events (all optional). */
 export interface EventsQuery {
   actor?: ActorKind;
@@ -195,6 +240,35 @@ export const api = {
   run: (id: Id) => request<RunDetailResponse>("GET", `/api/runs/${seg(id)}`),
   revertRun: (id: Id, confirm = false) =>
     request<RevertResponse>("POST", `/api/runs/${seg(id)}/revert`, { body: confirm ? { confirm: true } : {} }),
+
+  captures: (query: { status?: string; before?: string; limit?: number } = {}) =>
+    request<CapturesResponse>("GET", "/api/captures", { query: { ...query } }),
+  capture: (id: Id) => request<CaptureDetailResponse>("GET", `/api/captures/${seg(id)}`),
+  updateCapture: (id: Id, body: UpdateCaptureRequest) =>
+    request<MutationResponse<Capture>>("PATCH", `/api/captures/${seg(id)}`, { body }),
+  retryCapture: (id: Id) => request<{ capture: Capture }>("POST", `/api/captures/${seg(id)}/retry`),
+
+  createCaptureText: async (text: string, onProgress?: (progress: number) => void) => {
+    const form = new FormData();
+    form.append("kind", "text");
+    form.append("text", text);
+    onProgress?.(0);
+    const result = await uploadCapture(form, onProgress);
+    onProgress?.(100);
+    return result;
+  },
+  createCaptureFile: (
+    file: File,
+    kind: "voice" | "file",
+    duration_s: number | null = null,
+    onProgress?: (progress: number) => void,
+  ) => {
+    const form = new FormData();
+    form.append("kind", kind);
+    form.append("file", file);
+    if (duration_s !== null) form.append("duration_s", String(duration_s));
+    return uploadCapture(form, onProgress);
+  },
 };
 
 /** Where a capture's audio streams from (after the session check). */

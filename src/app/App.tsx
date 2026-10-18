@@ -3,12 +3,15 @@
 
 import { Suspense, lazy, useEffect, useState, type JSX } from "react";
 import { ActivityView } from "./activity/ActivityView";
-import { ActivityIcon, BoardIcon, ListIcon, SettingsIcon } from "./components/icons";
+import { ActivityIcon, BoardIcon, InboxIcon, ListIcon, SettingsIcon } from "./components/icons";
+import { CaptureSheet } from "./capture/CaptureSheet";
+import { InboxView } from "./inbox/InboxView";
 import { useIsPhone } from "./hooks";
 import { ListView } from "./list/ListView";
 import { ItemPanel } from "./panel/ItemPanel";
 import { ROUTES, followLink, goTo, navigate, routeOf, useLocation, type Route } from "./router";
 import { SettingsView } from "./settings/SettingsView";
+import { api } from "./api";
 import { store, useLoadStatus, usePlanner, useSyncTrouble } from "./store";
 import { Toasts } from "./toast";
 
@@ -18,6 +21,7 @@ const BoardView = lazy(() => import("./board/BoardView"));
 const ICONS: Record<Route, () => JSX.Element> = {
   board: BoardIcon,
   list: ListIcon,
+  inbox: InboxIcon,
   activity: ActivityIcon,
   settings: SettingsIcon,
 };
@@ -66,6 +70,17 @@ function Shell() {
   const trouble = useSyncTrouble();
   const route: Route | null = path === "/" ? (phone ? "list" : "board") : routeOf(path);
   const item = search.get("item");
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureAutoStart, setCaptureAutoStart] = useState(false);
+  const openCapture = (autoStart: boolean) => {
+    setCaptureAutoStart(autoStart);
+    setCaptureOpen(true);
+  };
+  useEffect(() => {
+    void api.captures({ status: "new", limit: 100 }).then((res) => {
+      for (const c of res.captures) store.putCapture(c);
+    }).catch(() => undefined);
+  }, []);
 
   // "/" opens the board on wide screens and the list on phones.
   useEffect(() => {
@@ -88,6 +103,11 @@ function Shell() {
           <span className="brand-name">Shared Planner</span>
         </a>
         {!phone && <NavLinks current={route} className="top-nav" />}
+        {!phone && (
+          <button type="button" className="button button--primary button--small" onClick={() => openCapture(true)}>
+            Record
+          </button>
+        )}
         <Me />
       </header>
       {trouble && (
@@ -98,8 +118,22 @@ function Shell() {
       <main className="app-main" id="main" tabIndex={-1}>
         <View route={route} />
       </main>
-      {phone && <NavLinks current={route} className="tab-bar" />}
+      {phone && (
+        <div className="tab-bar-wrap">
+          <NavLinks current={route} className="tab-bar" />
+          <button
+            type="button"
+            className="record-button record-button--bar"
+            onClick={() => openCapture(true)}
+            aria-label="Record"
+          >
+            <span className="record-dot" aria-hidden="true" />
+            <span>Record</span>
+          </button>
+        </div>
+      )}
       {item !== null && <ItemPanel key={item} itemKey={item} />}
+      {captureOpen && <CaptureSheet autoStart={captureAutoStart} onClose={() => setCaptureOpen(false)} />}
       <Toasts />
     </div>
   );
@@ -115,6 +149,8 @@ function View({ route }: { route: Route | null }) {
       );
     case "list":
       return <ListView />;
+    case "inbox":
+      return <InboxView />;
     case "activity":
       return <ActivityView />;
     case "settings":
@@ -133,6 +169,7 @@ function View({ route }: { route: Route | null }) {
 }
 
 function NavLinks({ current, className }: { current: Route | null; className: string }) {
+  const newCaptures = usePlanner((s) => [...s.captures.values()].filter((c) => c.inbox_status === "new").length);
   return (
     <nav className={className} aria-label="Main">
       {ROUTES.map(({ route, path, label }) => {
@@ -147,6 +184,7 @@ function NavLinks({ current, className }: { current: Route | null; className: st
           >
             <Icon />
             <span>{label}</span>
+            {route === "inbox" && newCaptures > 0 && <span className="badge badge--count">{newCaptures}</span>}
           </a>
         );
       })}

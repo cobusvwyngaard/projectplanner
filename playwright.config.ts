@@ -17,7 +17,16 @@ export default defineConfig({
     timezoneId: "Africa/Johannesburg",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
+      },
+    },
+  ],
   webServer: {
     command: "sh scripts/e2e-server.sh",
     url: "http://localhost:8788/login",

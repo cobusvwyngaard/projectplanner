@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../env";
 import { jsonError } from "../lib/http";
+import { capturesRouter } from "./captures";
 import { eventsRouter, historyRouter } from "./events";
 import { feedRouter } from "./feed";
 import { labelsRouter } from "./labels";
@@ -20,6 +21,7 @@ import { usersRouter } from "./users";
 export const apiRouter = new Hono<AppBindings>();
 
 apiRouter.route("/", feedRouter);
+apiRouter.route("/captures", capturesRouter);
 apiRouter.route("/notes", notesRouter);
 apiRouter.route("/tasks", tasksRouter);
 apiRouter.route("/links", linksRouter);

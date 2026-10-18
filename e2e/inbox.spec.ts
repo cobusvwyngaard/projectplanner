@@ -6,6 +6,11 @@ test("inbox shows captures and filters", async ({ page }) => {
   await page.goto("/inbox");
   // Empty state possible; just ensure the view renders.
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
+  // The default filter is New, and the selected filter is marked.
+  await expect(page.getByRole("button", { name: "New", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });
 
 test("quick text capture appears in inbox", async ({ page }) => {

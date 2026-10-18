@@ -175,7 +175,8 @@ export function InboxView() {
           <button
             key={f.id}
             type="button"
-            className={`segment${status === f.id ? " segment--active" : ""}`}
+            className="segment"
+            aria-pressed={status === f.id}
             onClick={() => setStatus(f.id)}
           >
             {f.label}

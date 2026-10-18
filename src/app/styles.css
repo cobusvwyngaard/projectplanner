@@ -2100,6 +2100,22 @@ fieldset:disabled .chip-option {
 }
 .modal-head h2 { margin: 0; font-size: 1.1rem; }
 .capture-sheet .segmented { margin-bottom: 16px; }
+
+/* The inbox filter: one line, scrolling sideways when it must, with the
+   selected filter marked like the List view's active tab. */
+.inbox .segmented {
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.inbox .segmented::-webkit-scrollbar {
+  display: none;
+}
+.inbox .segment[aria-pressed="true"] {
+  color: var(--text);
+  border-bottom: 3px solid var(--accent);
+}
 .capture-record { display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .record-timer { font-size: 2rem; font-variant-numeric: tabular-nums; }
 .level-meter {

@@ -360,13 +360,13 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
         </header>
 
         <div className="segmented" role="tablist" aria-label="Capture mode">
-          <button type="button" className={`segment${mode === "record" ? " segment--active" : ""}`} onClick={() => setMode("record")}>
+          <button type="button" className="segment" aria-pressed={mode === "record"} onClick={() => setMode("record")}>
             Record
           </button>
-          <button type="button" className={`segment${mode === "upload" ? " segment--active" : ""}`} onClick={() => setMode("upload")}>
+          <button type="button" className="segment" aria-pressed={mode === "upload"} onClick={() => setMode("upload")}>
             Upload
           </button>
-          <button type="button" className={`segment${mode === "text" ? " segment--active" : ""}`} onClick={() => setMode("text")}>
+          <button type="button" className="segment" aria-pressed={mode === "text"} onClick={() => setMode("text")}>
             Quick text
           </button>
         </div>

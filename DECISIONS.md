@@ -339,3 +339,11 @@ at the bottom of each section.
 - **Multipart uploads in tests.** `TestApi.send` now accepts `FormData` bodies and awaits `waitUntil` promises before returning, so transcription completes within a request in worker tests.
 - **Extension mapping.** `video/webm` and `video/mp4` (allowed uploads) map to `webm`/`m4a` alongside their audio counterparts; unknown MIME types fall back to `bin`.
 - **Lease timing.** `acquire` stamps `transcribe_next_at` 15 minutes ahead; `backoff` uses 10 min x 2^(attempts-1). Permanent failures leave the lease timestamp in place.
+
+### Capture screen and Inbox
+
+- **Capture state lives in a separate map.** Captures are not part of `RowTypes`; `PlannerState.captures` is a `ReadonlyMap` updated by the change feed, so the Inbox refreshes transcripts on its own. Mutations push their row in through `PlannerStore.putCapture`.
+- **Recording is held in memory until saved.** A failed upload keeps the Blob and offers "Try again" and "Save to this device" (an object URL, revoked afterwards); a recording is never discarded on failure.
+- **Upload progress uses XMLHttpRequest**, since `fetch` cannot report upload progress.
+- **The phone bottom bar centres the Record button** between the first two and last three nav links, so it is reachable in one tap and opens the sheet already recording.
+- **Inbox edits use `useDraft`**, so a failed transcript save keeps the typing and shows the error in a toast.

@@ -274,7 +274,7 @@ textarea {
 .tab-bar {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -1898,7 +1898,7 @@ fieldset:disabled .chip-option {
   }
 
   .page {
-    padding: 16px 16px 32px;
+    padding: 16px 16px 72px;
   }
 
   .panel {
@@ -2070,3 +2070,126 @@ fieldset:disabled .chip-option {
     transition-duration: 0.01ms !important;
   }
 }
+/* Capture sheet and inbox (phase 2) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 16px;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal-head h2 { margin: 0; font-size: 1.1rem; }
+.capture-sheet .segmented { margin-bottom: 16px; }
+.capture-record { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.record-timer { font-size: 2rem; font-variant-numeric: tabular-nums; }
+.level-meter {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.level-bar { height: 100%; background: var(--accent); transition: width 80ms linear; }
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.progress {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-bar { height: 100%; background: var(--accent); transition: width 120ms linear; }
+.capture-upload, .capture-text { display: flex; flex-direction: column; gap: 12px; }
+.upload-meta { display: flex; flex-direction: column; gap: 4px; }
+.textarea { min-height: 120px; resize: vertical; }
+.capture-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.capture-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.capture-card-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.9rem; }
+.capture-author { font-weight: 600; }
+.capture-kind, .capture-duration { color: var(--muted); font-size: 0.85rem; }
+.capture-transcript { display: flex; flex-direction: column; gap: 6px; }
+.capture-run { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+.capture-detail { background: var(--surface-2); border-radius: var(--radius); padding: 8px; }
+.capture-detail ul { margin: 0; padding-left: 16px; }
+.record-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* The phone's record button: a raised circle in the middle of the tab bar. */
+.tab-bar-wrap {
+  position: relative;
+  flex: none;
+}
+.record-button--bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 10px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  flex-direction: column;
+  width: 64px;
+  height: 64px;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: var(--shadow-md);
+  z-index: 21;
+  font-size: 0.65rem;
+}
+.record-button--bar .record-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.badge--count {
+  background: var(--danger);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.75rem;
+  margin-left: 4px;
+}
+.load-more { display: flex; justify-content: center; padding: 12px 0; }
+.empty { color: var(--muted); text-align: center; padding: 24px; }

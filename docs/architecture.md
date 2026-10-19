@@ -195,6 +195,16 @@ appear in the app exactly like human ones: provenance badges
 ("Claude (via …)"), the Activity view, `source_capture_ids` links back to
 captures, and `/api/runs/:id/revert` to undo a whole run.
 
+Settings › Claude connections shows the live connections and can end one
+(`src/worker/api/claude.ts`). `GET /api/claude-connections` walks every
+user's grants, names each client (`lookupClient`, with "Unnamed client" as
+the fallback) and answers `{ connections }` newest first.
+`POST /api/claude-connections/:userId/:grantId/disconnect` revokes that
+grant and logs exactly one `session_revoke` event for
+`claude_connection`, attributed to the signed-in person. Revoking takes
+effect at once, so the connection's access token and refresh token both
+stop working.
+
 ## Front end
 
 - React 19 + Vite, `@xyflow/react` for the canvas. No other UI libraries.

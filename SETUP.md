@@ -171,9 +171,12 @@ Notes:
 - Each person connects from their own claude.ai account and their own
   browser session; the token carries the id of whoever approved the consent
   page, so writes always land on that person's behalf.
-- To disconnect: claude.ai Settings → Connectors → remove the planner.
-  Removing it in claude.ai stops the calls; the old grant record stays in
-  the planner's `oauth_kv` table until you delete it by hand.
+- To see or end a connection: open the planner's **Settings → Claude
+  connections**. It lists every connection with the client's name, the person
+  who allowed it and the day it connected, and **Disconnect** revokes it at
+  once — the access token and the refresh token both stop working. Removing
+  the connector in claude.ai only stops Claude calling; come back here to
+  disconnect it properly.
 - Local tools (MCP Inspector) work on `http://localhost` redirect URIs;
   everything else must be claude.ai's callback (see DECISIONS.md).
 

@@ -424,13 +424,14 @@ at the bottom of each section.
   `dmarc=pass` with `header.from` equal to the From address's domain. Results
   from any other authserv-id are ignored, never trusted, and the message is
   still accepted when a registered address is in To or Cc.
-- **Nothing private is logged.** The one line the path may write is
-  `email auth: authserv-id=<id> <result words>`, and only when the authserv-id
-  is not Cloudflare's (so we notice a change in what Cloudflare stamps). It
-  never names an address, subject, body, file name or header value, and the
-  privacy test drives the whole receive-and-read path with every console
-  method captured. Tests use only made-up messages and example.com/example.org
-  addresses.
+- **Nothing private is logged.** The path writes at most one auth line:
+  `email auth: authserv-id=<id> <result words>` when the results came from an
+  id that is not Cloudflare's (so we notice a change in what Cloudflare stamps),
+  or `email auth: none` when the message carried no Authentication-Results
+  header at all. It never names an address, subject, body, file name or header
+  value, and the privacy test drives the whole receive-and-read path with every
+  console method captured. Tests use only made-up messages and
+  example.com/example.org addresses.
 - **A very long body is cut.** The stored text stops at 100 000 characters and
   ends with `[…cut: the email is longer]`, so one huge email cannot make a row
   that is awkward to load. The note is added only when something was dropped,

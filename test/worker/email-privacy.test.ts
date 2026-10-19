@@ -72,14 +72,17 @@ function rawMessage(): string {
   ].join("\r\n");
 }
 
-async function deliver(raw: string): Promise<void> {
+async function deliver(raw: string): Promise<string | null> {
   const pending: Promise<unknown>[] = [];
+  let rejected: string | null = null;
   const message = {
     from: "sender.secret@example.org",
     to: REGISTERED,
     raw: new Blob([raw]).stream(),
     rawSize: new TextEncoder().encode(raw).length,
-    setReject: () => {},
+    setReject: (reason: string) => {
+      rejected = reason;
+    },
     forward: () => Promise.reject(new Error("forward is not used")),
     reply: () => Promise.reject(new Error("reply is not used")),
   } as unknown as ForwardableEmailMessage;
@@ -91,6 +94,12 @@ async function deliver(raw: string): Promise<void> {
   } as ExecutionContext;
   await worker.email(message, env, ctx);
   await Promise.allSettled(pending);
+  return rejected;
+}
+
+/** The same made-up message with its Authentication-Results header removed. */
+function withoutAuthResults(raw: string): string {
+  return raw.replace(/^Authentication-Results:.*\r\n/m, "");
 }
 
 describe("email privacy", () => {
@@ -112,6 +121,35 @@ describe("email privacy", () => {
     // The one log line is present, so the check is not vacuous.
     const logged = lines.join("\n");
     expect(logged).toContain("email auth: authserv-id=example.org");
+    for (const secret of SECRETS) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+
+  it("says so when an accepted message has no authentication results", async () => {
+    await deliver(withoutAuthResults(rawMessage()));
+
+    // The message was accepted and read, so the log line is not the only event.
+    const capture = await db
+      .prepare(`SELECT text FROM captures ORDER BY created_at, id LIMIT 1`)
+      .first<{ text: string | null }>();
+    expect(capture?.text).toBe("The secret body of the message.");
+
+    const logged = lines.join("\n");
+    expect(logged).toContain("email auth: none");
+    expect(logged).not.toContain("authserv-id=");
+    for (const secret of SECRETS) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+
+  it("says so when a rejected message has no authentication results", async () => {
+    const raw = withoutAuthResults(rawMessage()).replace(`To: ${REGISTERED}`, "To: nobody@example.org");
+    const rejected = await deliver(raw);
+    expect(rejected).not.toBeNull();
+
+    const logged = lines.join("\n");
+    expect(logged).toContain("email auth: none");
     for (const secret of SECRETS) {
       expect(logged).not.toContain(secret);
     }

@@ -143,11 +143,15 @@ function participant(address: EmailAddress, role: "from" | "to" | "cc", register
 }
 
 /**
- * One line when the results did not come from Cloudflare, naming only the
- * authserv-id and the result words: never an address, subject or body.
+ * One line when the message carried no authentication results at all, or when
+ * they did not come from Cloudflare, naming only the authserv-id and the result
+ * words: never an address, subject or body.
  */
 function logUnrecognisedAuth(authResults: string | null): void {
-  if (!authResults) return;
+  if (!authResults) {
+    console.log("email auth: none");
+    return;
+  }
   const id = authservId(authResults);
   if (CLOUDFLARE_AUTHSERV_IDS.includes(id)) return;
   const words = authResultWords(authResults).join(" ");

@@ -183,7 +183,7 @@ export interface ClaudeConnectionView {
   connected_at: Timestamp;
 }
 
-/** GET /api/claude-connections — every connection both users have granted, newest first */
+/** GET /api/claude-connections — every connection any person has granted, newest first */
 export interface ClaudeConnectionsResponse {
   connections: ClaudeConnectionView[];
 }

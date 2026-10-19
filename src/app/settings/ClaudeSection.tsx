@@ -1,5 +1,5 @@
 // Settings › Claude connections: every OAuth connection Claude holds for
-// either person, newest first, with Disconnect per connection. Revoking one
+// any person, newest first, with Disconnect per connection. Revoking one
 // takes effect at once: the access token and the refresh token both stop
 // working.
 

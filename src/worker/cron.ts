@@ -2,12 +2,17 @@
 
 import { purgeExpired } from "./oauth/kv";
 import { transcribeCapture } from "./captures/transcribe";
+import { closeExpiredRuns } from "./mcp/runs";
 import type { AppEnv } from "./env";
 
-/** Housekeeping run by the cron trigger: drop expired OAuth records. */
-export async function runScheduled(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLABS_API_KEY" | "TRANSCRIBER">): Promise<void> {
+/** Housekeeping run by the cron trigger: expired OAuth records, transcription retries, expired Claude runs. */
+export async function runScheduled(
+  env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLABS_API_KEY" | "TRANSCRIBER">,
+  now: Date = new Date(),
+): Promise<void> {
   await purgeExpired(env.DB);
-  await retryTranscriptions(env, new Date());
+  await retryTranscriptions(env, now);
+  await closeExpiredRuns(env, now);
 }
 
 async function retryTranscriptions(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLABS_API_KEY" | "TRANSCRIBER">, now: Date): Promise<void> {

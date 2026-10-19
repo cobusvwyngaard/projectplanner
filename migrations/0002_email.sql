@@ -77,8 +77,9 @@ SELECT 'email-' || id, id, lower(email), '2026-01-01T00:00:00.000Z', NULL
 FROM users
 WHERE email IS NOT NULL;
 
--- Attachments of an email capture (SPEC 11.3). At most 20 are stored; the rest
--- are listed with r2_key NULL and too_large 1.
+-- Attachments of an email capture (SPEC 11.3). At most 20 are listed; one
+-- larger than the size limit is listed with r2_key NULL and too_large 1, so it
+-- shows its name, type and size without its content.
 CREATE TABLE capture_attachments (
   id          TEXT PRIMARY KEY,
   capture_id  TEXT NOT NULL REFERENCES captures(id),

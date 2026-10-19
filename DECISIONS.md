@@ -431,12 +431,17 @@ at the bottom of each section.
   privacy test drives the whole receive-and-read path with every console
   method captured. Tests use only made-up messages and example.com/example.org
   addresses.
+- **A very long body is cut.** The stored text stops at 100 000 characters and
+  ends with `[…cut: the email is longer]`, so one huge email cannot make a row
+  that is awkward to load. The note is added only when something was dropped,
+  so a body exactly at the limit is unchanged.
 - **Attachment limits are ours.** SPEC 11.3 says "size-limited, at most 20 per
-  email" without numbers, so: at most 20 attachments are listed (the rest are
-  dropped); each up to 10 MB is stored, and a larger one is still listed with
-  `too_large` 1 and a null `r2_key`; a raw message over 25 MB is refused, which
-  matches Email Routing's own ceiling. The listing is what the person sees, so
-  an unsent attachment is shown as such rather than disappearing.
+  email" without numbers. Content is stored for the first 20 attachments, each
+  up to 10 MB; attachments 21 to 100 are still listed, with `too_large` 1 and a
+  null `r2_key`; anything after the 100th is ignored, so one email cannot make
+  thousands of rows. A raw message over 25 MB is refused, which matches Email
+  Routing's own ceiling. The listing is what the person sees, so an attachment
+  whose content was not kept is still shown rather than disappearing.
 - **The raw message is stored before its capture.** If the capture insert then
   fails, R2 holds an object that no row points at. The cron looks for captures,
   not objects, so that message is lost; with two people and a healthy D1 this

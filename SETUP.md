@@ -265,9 +265,11 @@ move Proton's mail too. Use either
   capture is then marked "sender not verified" and counts as sent by nobody.
 - The raw message is kept in the R2 bucket (`emails/<yyyy>/<mm>/<id>.eml`,
   never public). Its plain-text body (HTML converted to text) is read just
-  after it arrives, and its attachments are stored separately: listed with
-  name, type and size, at most 20 per email, each up to 10 MB. They download
-  through the Worker, after the session check.
+  after it arrives; a body longer than 100 000 characters is cut, with a note
+  saying so. Its attachments are stored separately: the first 20 that are at
+  most 10 MB each keep their content, later ones are still listed (up to 100
+  in all) but cannot be downloaded. They download through the Worker, after
+  the session check.
 - Messages over 25 MB are refused by the Worker; Email Routing may refuse
   larger ones before the Worker sees them.
 - The email path logs nothing private: at most one line naming the

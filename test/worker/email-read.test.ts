@@ -4,7 +4,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PostalMime from "postal-mime";
-import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, MAX_BODY_CHARS, readEmail } from "../../src/worker/email/read";
+import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, MAX_BODY_CHARS, MAX_LISTED_ATTACHMENTS, readEmail } from "../../src/worker/email/read";
 import { runScheduled } from "../../src/worker/cron";
 import { allEvents, eventsFor, freshDb, USER_1 } from "../helpers/db";
 
@@ -214,8 +214,8 @@ describe("readEmail: attachments", () => {
     expect((await env.AUDIO.list({ prefix: "attachments/c4/" })).objects).toEqual([]);
   });
 
-  it("lists at most twenty attachments and ignores the rest", async () => {
-    const many = Array.from({ length: MAX_ATTACHMENTS + 2 }, (_, i) => ({
+  it("stores the first twenty attachments and lists the rest without content", async () => {
+    const many = Array.from({ length: MAX_ATTACHMENTS + 5 }, (_, i) => ({
       filename: `file-${i + 1}.txt`,
       mime: "text/plain",
       bytes: new TextEncoder().encode(`contents ${i + 1}`),
@@ -223,8 +223,32 @@ describe("readEmail: attachments", () => {
     await putEmail("c5", attachmentMessage(many));
     await readEmail(env, "c5");
     const listed = await attachments("c5");
-    expect(listed.map((a) => a.filename)).toEqual(many.slice(0, MAX_ATTACHMENTS).map((a) => a.filename));
-    expect(listed.every((a) => a.too_large === 0)).toBe(true);
+    expect(listed.map((a) => a.filename)).toEqual(many.map((a) => a.filename));
+
+    const kept = listed.filter((a) => a.r2_key !== null);
+    expect(kept.map((a) => a.filename)).toEqual(many.slice(0, MAX_ATTACHMENTS).map((a) => a.filename));
+    expect(kept.every((a) => a.too_large === 0)).toBe(true);
+
+    const unkept = listed.filter((a) => a.r2_key === null);
+    expect(unkept.map((a) => a.filename)).toEqual(many.slice(MAX_ATTACHMENTS).map((a) => a.filename));
+    expect(unkept.every((a) => a.too_large === 1)).toBe(true);
+
+    const stored = await env.AUDIO.list({ prefix: "attachments/c5/" });
+    expect(stored.objects).toHaveLength(MAX_ATTACHMENTS);
+  });
+
+  it("ignores attachments after the hundredth", async () => {
+    const many = Array.from({ length: MAX_LISTED_ATTACHMENTS + 2 }, (_, i) => ({
+      filename: `file-${i + 1}.txt`,
+      mime: "text/plain",
+      bytes: new TextEncoder().encode("x"),
+    }));
+    await putEmail("c12", attachmentMessage(many));
+    await readEmail(env, "c12");
+    const listed = await attachments("c12");
+    expect(listed).toHaveLength(MAX_LISTED_ATTACHMENTS);
+    expect(listed.some((a) => a.filename === `file-${MAX_LISTED_ATTACHMENTS + 1}.txt`)).toBe(false);
+    expect(listed.filter((a) => a.r2_key !== null)).toHaveLength(MAX_ATTACHMENTS);
   });
 });
 

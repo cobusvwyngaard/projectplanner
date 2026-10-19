@@ -178,9 +178,10 @@ The body is read after the answer, from a `waitUntil`, by `readEmail()`
 (`src/worker/email/read.ts`): `postal-mime` gives the plain text (or an HTML
 body through `body.ts`'s `htmlToText`) and the attachments. Each attachment
 becomes a `capture_attachments` row through `mutateMany`, with its content in
-`attachments/<capture id>/<attachment id>` unless it is over 10 MB, in which
-case the row is kept with `too_large` 1 and no key. At most 20 attachments are
-listed; any beyond that are dropped. `readEmail` takes the same transcription
+`attachments/<capture id>/<attachment id>` for the first 20 that are at most
+10 MB; a later or larger attachment is still listed, with `too_large` 1 and no
+key, up to 100 rows in all (anything beyond that is dropped). `readEmail` takes
+the same transcription
 lease as `transcribeCapture`, so a capture is read once, and `cron.ts` routes a
 due `email` capture back to `readEmail` (never to the transcriber) while
 everything else goes to `transcribeCapture`.

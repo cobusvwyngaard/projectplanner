@@ -11,8 +11,10 @@ import { SYSTEM_ACTOR } from "../mutate/actor";
 import { mutate, mutateMany, type Mutation } from "../mutate/index";
 import { htmlToText } from "./body";
 
-/** At most this many attachments are listed per email (SPEC 11.3). */
+/** Content is stored for at most this many attachments per email (SPEC 11.3). */
 export const MAX_ATTACHMENTS = 20;
+/** Rows are made for at most this many attachments; anything later is ignored. */
+export const MAX_LISTED_ATTACHMENTS = 100;
 /** An attachment larger than this is listed but its content is not stored. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 /** A body longer than this is cut, so one email cannot fill the row. */
@@ -87,18 +89,23 @@ async function markFailed(db: D1Database, id: string, row: CaptureRow, error: st
   });
 }
 
-/** Store the attachments that fit in R2 and describe all of them (at most 20). */
+/**
+ * Store the content of the first attachments that fit in R2 and describe every
+ * one that is listed (the first 100). An attachment past the first 20, or one
+ * over the size limit, is still listed but with no content (too_large 1).
+ */
 async function storeAttachments(
   env: Pick<AppEnv, "DB" | "AUDIO">,
   captureId: string,
   attachments: readonly Attachment[],
 ): Promise<Mutation[]> {
   const mutations: Mutation[] = [];
-  for (const attachment of attachments.slice(0, MAX_ATTACHMENTS)) {
+  const listed = attachments.slice(0, MAX_LISTED_ATTACHMENTS);
+  for (const [index, attachment] of listed.entries()) {
     const bytes = attachmentBytes(attachment);
     const id = ulid();
     let r2Key: string | null = null;
-    if (bytes.length <= MAX_ATTACHMENT_BYTES) {
+    if (index < MAX_ATTACHMENTS && bytes.length <= MAX_ATTACHMENT_BYTES) {
       r2Key = `attachments/${captureId}/${id}`;
       try {
         await env.AUDIO.put(r2Key, bytes, { httpMetadata: { contentType: mimeOf(attachment) } });

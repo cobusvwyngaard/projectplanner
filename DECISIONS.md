@@ -410,3 +410,56 @@ at the bottom of each section.
 - **Upload progress uses XMLHttpRequest**, since `fetch` cannot report upload progress.
 - **The phone bottom bar centres the Record button** between the first two and last three nav links, so it is reachable in one tap and opens the sheet already recording.
 - **Inbox edits use `useDraft`**, so a failed transcript save keeps the typing and shows the error in a toast.
+
+## Email
+
+- **One dependency, pinned.** `postal-mime`, pinned to exactly `4.0.4`, is the
+  only library added for email (the plan allows one). It parses the raw message
+  off the request path; only the default parse is used, so an attachment's
+  `content` is an `ArrayBuffer`.
+- **Only Cloudflare's authentication results count.** `CLOUDFLARE_AUTHSERV_IDS`
+  holds `mx.cloudflare.net` and nothing else **(unverified: confirm on the
+  first real email)**. Only the *first* Authentication-Results header is read,
+  because a sender can add forged ones below it, and verification needs
+  `dmarc=pass` with `header.from` equal to the From address's domain. Results
+  from any other authserv-id are ignored, never trusted, and the message is
+  still accepted when a registered address is in To or Cc.
+- **Nothing private is logged.** The one line the path may write is
+  `email auth: authserv-id=<id> <result words>`, and only when the authserv-id
+  is not Cloudflare's (so we notice a change in what Cloudflare stamps). It
+  never names an address, subject, body, file name or header value, and the
+  privacy test drives the whole receive-and-read path with every console
+  method captured. Tests use only made-up messages and example.com/example.org
+  addresses.
+- **Attachment limits are ours.** SPEC 11.3 says "size-limited, at most 20 per
+  email" without numbers, so: at most 20 attachments are listed (the rest are
+  dropped); each up to 10 MB is stored, and a larger one is still listed with
+  `too_large` 1 and a null `r2_key`; a raw message over 25 MB is refused, which
+  matches Email Routing's own ceiling. The listing is what the person sees, so
+  an unsent attachment is shown as such rather than disappearing.
+- **The raw message is stored before its capture.** If the capture insert then
+  fails, R2 holds an object that no row points at. The cron looks for captures,
+  not objects, so that message is lost; with two people and a healthy D1 this
+  is accepted over a compensating delete that could fail in its turn.
+- **A duplicate Message-ID is dropped silently.** No `setReject`: a duplicate
+  is not the sender's fault. A message with no Message-ID is given
+  `<sha256(raw)@no-message-id>`, so a redelivery of the same bytes is caught
+  too.
+- **An unverified sender credits nobody.** The capture's `author_user_id` is
+  null unless a registered sender passed authentication, and the app and MCP
+  show that as "Email" rather than a person, so no one is recorded as having
+  sent mail they did not.
+- **`capture.checkCreate`.** People create text/voice/file captures and the
+  system creates email ones, so the create rule refuses the system creating
+  anything but an email and a person creating an email. That keeps the email
+  headers (all `createOnly`) beyond the upload route's reach.
+- **Archiving an address frees it.** `user_emails` is unique among open rows,
+  so an address is moved between people by archiving it and adding it again;
+  the API's pre-check turns the clash into "That address already belongs to
+  <name>."
+- **The cron routes by kind.** A due `email` capture goes to `readEmail`, never
+  to the audio transcriber, even though both share `transcript_status` and the
+  15-minute lease.
+- **`htmlToText` lives in `src/worker/email/body.ts`**, free of Worker
+  bindings, so it is unit-testable; the email tests are in `test/worker/`
+  because `tsconfig.node.json` does not include files under `src/worker`.

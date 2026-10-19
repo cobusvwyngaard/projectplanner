@@ -23,7 +23,10 @@ request ─► plain http on a host other than localhost: 308 to the same URL on
                  │                                           session required, else redirect to /login?next=…
                  ├─ /api/sessions, /api/*                    session required, else 401 JSON
                  └─ SPA (index.html, /assets/*)              session required, else redirect to /login?next=…
-cron (every 10 min) ─► src/worker/cron.ts: transcription retries, auto-closing runs
+cron (every 10 min) ─► src/worker/cron.ts: transcription retries, email body
+                        reads, auto-closing runs
+email (Cloudflare Email Routing) ─► src/worker/email/receive.ts: accept or
+                        reject, store the raw message, create the capture
 ```
 
 The provider must know its resource URL (`<origin>/mcp`) when it is built,
@@ -56,6 +59,8 @@ src/worker/
                        and history, runs, titles, field rules, placement of new notes
   captures/            upload, R2 storage, transcription, audio streaming with Range support, cron retry
   api/captures.ts       captures API routes (create/upload/transcribe/edit/ignore/retry/audio)
+  email/               the email() handler and reading: headers and sender
+                       verification, body-to-text, readEmail, attachments
   mcp/                 PlannerMcp (one Durable Object per MCP session), runs
                        (the only direct writer of the runs table) and one
                        module per tool group: tools/read.ts, tools/writes.ts
@@ -84,8 +89,9 @@ e2e/                   Playwright smoke tests against `wrangler dev`
 
 `src/worker/mutate/index.ts` exports `mutate(db, actor, mutation)` and
 `mutateMany(db, actor, mutations, {prelude})`. Every write to `notes`,
-`tasks`, `links`, `labels`, `users`, `settings` and to the content fields of
-`captures` goes through it. Each change commits in one `db.batch()` with:
+`tasks`, `links`, `labels`, `users`, `user_emails`, `settings`,
+`capture_attachments` and to the content fields of `captures` goes through it.
+Each change commits in one `db.batch()` with:
 
 1. an UPDATE conditional on the changed fields still holding the values read
    (or an INSERT for creations);
@@ -153,6 +159,40 @@ of, the cards in the middle of the view.
 Badges ("Cobus", "Claude (via Cobus)") come from the first and last event of
 each note/task (`src/worker/board/provenance.ts`), returned as `prov` on
 `NoteView`/`TaskView`. `src/shared/actors.ts` formats an `ActorRef` for display.
+
+## Email capture (SPEC 11)
+
+Cloudflare Email Routing calls `email()` (`src/worker/email/receive.ts`) for the
+planner's address. It reads only the header block (`headers.ts`), decides with
+`verify.ts` whether a registered sender is verified (only results from
+Cloudflare's authserv-id count, and only the first Authentication-Results
+header), looks up every From/To/Cc address in `user_emails`, and creates an
+`email` capture through `mutate()` as the system actor, so it appears in
+Activity. The raw message goes to `emails/<yyyy>/<mm>/<id>.eml` in R2 first; a
+Message-ID already seen is ignored, and a capture whose sender is not verified
+has a null author. Addresses are managed by `api/users.ts`:
+`POST /api/users/:id/emails` and `POST /api/user-emails/:id/archive` (archiving
+frees the address for reuse).
+
+The body is read after the answer, from a `waitUntil`, by `readEmail()`
+(`src/worker/email/read.ts`): `postal-mime` gives the plain text (or an HTML
+body through `body.ts`'s `htmlToText`) and the attachments. Each attachment
+becomes a `capture_attachments` row through `mutateMany`, with its content in
+`attachments/<capture id>/<attachment id>` unless it is over 10 MB, in which
+case the row is kept with `too_large` 1 and no key. At most 20 attachments are
+listed; any beyond that are dropped. `readEmail` takes the same transcription
+lease as `transcribeCapture`, so a capture is read once, and `cron.ts` routes a
+due `email` capture back to `readEmail` (never to the transcriber) while
+everything else goes to `transcribeCapture`.
+
+Attachments download through `GET /api/captures/:id/attachments/:attachmentId`
+after the session check (`api/captures.ts`): the row is looked up by attachment
+id and capture id together, so it cannot be fetched through another capture; the
+response carries the stored MIME type and a `Content-Disposition` built from the
+file name (both `filename=` and `filename*`); a row with no stored content is a
+409, and an unknown or missing one a 404. The raw messages and the attachment
+objects are never public, and nothing on this path logs an address, subject,
+body, file name or header value.
 
 ## MCP layer
 

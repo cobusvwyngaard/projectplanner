@@ -156,7 +156,7 @@ each note/task (`src/worker/board/provenance.ts`), returned as `prov` on
 
 - React 19 + Vite, `@xyflow/react` for the canvas. No other UI libraries.
   The canvas is loaded lazily, with its own stylesheet.
-- Path routes: `/board`, `/list`, `/activity`, `/settings`, `/inbox`, `/capture`. `/` opens the board on wide screens and the list on phones
+- Path routes: `/board`, `/list`, `/inbox`, `/activity`, `/settings`. The capture sheet is a pop-up over any page (Record button), not a route. `/` opens the board on wide screens and the list on phones
   (< 768 px). The item panel is `?item=note:<id>` or `?item=task:<id>` on
   any route: a drawer on wide screens, a full-screen sheet on phones.
   Captures reach the browser through the change feed (`events` + current capture rows); the Inbox and capture sheet update via that data.

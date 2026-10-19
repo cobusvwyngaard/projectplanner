@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Smoke tests of phase 1 against `wrangler dev` with a fresh local database
-// (scripts/e2e-server.sh). See e2e/README.md.
+// (scripts/e2e-server.mjs). See e2e/README.md.
 export default defineConfig({
   testDir: "e2e",
   workers: 1,

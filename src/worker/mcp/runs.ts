@@ -24,11 +24,12 @@ export async function getOpenRun(
   now: Date,
 ): Promise<{ id: string; user_id: string; started_at: string }> {
   const run = await db
-    .prepare(`SELECT id, user_id, started_at FROM runs WHERE id = ?`)
+    .prepare(`SELECT id, user_id, started_at, finished_at FROM runs WHERE id = ?`)
     .bind(runId)
     .first<{ id: string; user_id: string; started_at: string; finished_at: string | null }>();
   if (!run) throw new NotFoundError("No such run.");
   if (run.user_id !== userId) throw new RunNotOpenError();
+  if (run.finished_at !== null) throw new RunNotOpenError();
   const started = new Date(run.started_at).getTime();
   if (now.getTime() - started > RUN_MAX_AGE_MS) throw new RunNotOpenError();
   return run;

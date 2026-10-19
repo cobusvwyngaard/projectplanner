@@ -8,7 +8,7 @@ import type { RevertResponse } from "../../src/shared/api";
 import { runScheduled } from "../../src/worker/cron";
 import { ConflictError, NotFoundError, RunNotOpenError, ValidationError } from "../../src/worker/lib/errors";
 import { ulid } from "../../src/worker/lib/ulid";
-import { finishRun, startRun, type ToolContext } from "../../src/worker/mcp/runs";
+import { finishRun, getOpenRun, startRun, type ToolContext } from "../../src/worker/mcp/runs";
 import { getBoard, getHistory, getInbox, getOverview } from "../../src/worker/mcp/tools/read";
 import {
   createNote,
@@ -455,6 +455,14 @@ describe("run guardrails", () => {
       updateTask(ctx(), { run_id: run, id: task, patch: { title: "Sneaky" }, source_capture_ids: [] }),
     ).rejects.toBeInstanceOf(RunNotOpenError);
     expect(await count("events")).toBe(eventsBefore);
+  });
+
+  it("getOpenRun refuses a finished run of the right user at the right age", async () => {
+    const run = await openRun(USER_1, { startedAt: now.toISOString(), finished: true });
+    await expect(getOpenRun(db, USER_1, run, now)).rejects.toBeInstanceOf(RunNotOpenError);
+    // The other checks still stand: an open run of this user, young enough, is fine.
+    const open = await openRun(USER_1, { startedAt: now.toISOString() });
+    await expect(getOpenRun(db, USER_1, open, now)).resolves.toMatchObject({ id: open });
   });
 });
 

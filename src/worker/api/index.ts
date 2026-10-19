@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings } from "../env";
 import { jsonError } from "../lib/http";
 import { capturesRouter } from "./captures";
+import { claudeRouter } from "./claude";
 import { eventsRouter, historyRouter } from "./events";
 import { feedRouter } from "./feed";
 import { labelsRouter } from "./labels";
@@ -16,7 +17,8 @@ import { usersRouter } from "./users";
  * Board API, mounted at /api behind the session check (src/worker/app.ts).
  * c.get("user") is the signed-in person; every write is theirs. Errors become
  * JSON error bodies here too, so the routes behave the same wherever the
- * router is mounted. /api/sessions lives in ./sessions.ts.
+ * router is mounted. /api/sessions lives in ./sessions.ts and
+ * /api/claude-connections in ./claude.ts.
  */
 export const apiRouter = new Hono<AppBindings>();
 
@@ -31,4 +33,5 @@ apiRouter.route("/settings", settingsRouter);
 apiRouter.route("/events", eventsRouter);
 apiRouter.route("/history", historyRouter);
 apiRouter.route("/runs", runsRouter);
+apiRouter.route("/claude-connections", claudeRouter);
 apiRouter.onError(jsonError);

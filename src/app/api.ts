@@ -8,6 +8,7 @@ import type {
   CaptureDetailResponse,
   CapturesResponse,
   ChangesResponse,
+  ClaudeConnectionsResponse,
   CreateLabelRequest,
   CreateLinkRequest,
   CreateNoteRequest,
@@ -229,6 +230,10 @@ export const api = {
   revokeSession: (id: Id) => request<Ok>("POST", `/api/sessions/${seg(id)}/revoke`),
   revokeMySessions: () => request<Ok>("POST", "/api/sessions/revoke-mine"),
   revokeCurrentSession: () => request<Ok>("POST", "/api/sessions/revoke-current"),
+
+  claudeConnections: () => request<ClaudeConnectionsResponse>("GET", "/api/claude-connections"),
+  disconnectClaude: (userId: Id, grantId: Id) =>
+    request<Ok>("POST", `/api/claude-connections/${seg(userId)}/${seg(grantId)}/disconnect`),
 
   events: (query: EventsQuery) => request<EventsResponse>("GET", "/api/events", { query: { ...query } }),
   history: (type: HistoryType, id: Id) => request<HistoryResponse>("GET", `/api/history/${seg(type)}/${seg(id)}`),

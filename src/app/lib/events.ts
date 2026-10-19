@@ -48,6 +48,7 @@ const NOUNS: Record<EntityType, string> = {
   user: "the person",
   setting: "the setting",
   session: "a browser",
+  claude_connection: "a Claude connection",
 };
 
 const SETTING_NAMES: Record<SettingKey, string> = {
@@ -306,6 +307,12 @@ function verbFor(event: PlannerEvent): Verb {
       return { verb: event.entity_type === "capture" ? "captured" : "created", suffix: "" };
     case "update":
       return updateVerb(event);
+    case "session_revoke": {
+      // A disconnection names the client it belonged to, after the noun.
+      if (event.entity_type !== "claude_connection") return { verb: ACTION_VERBS.session_revoke, suffix: "" };
+      const name = event.before?.client_name;
+      return { verb: "disconnected", suffix: typeof name === "string" && name !== "" ? `(${name})` : "" };
+    }
     default:
       return { verb: ACTION_VERBS[event.action], suffix: "" };
   }

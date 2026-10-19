@@ -69,6 +69,37 @@ describe("describeEvent", () => {
     expect(setting).toMatchObject({ verb: "changed", noun: "the setting", title: "Keyterm prompting" });
     expect(setting.changes).toEqual([{ field: "value_json", label: "Keyterm prompting", before: "Off", after: "On" }]);
   });
+
+  it("names the client of a disconnected Claude connection", () => {
+    const view = describeEvent(
+      event({
+        seq: 17,
+        entity_type: "claude_connection",
+        entity_id: "G1",
+        action: "session_revoke",
+        before: { user_id: OTHER.id, client_name: "Claude Desktop" },
+        after: null,
+      }),
+      ctx,
+    );
+    expect(view).toMatchObject({
+      actor: "Cobus",
+      verb: "disconnected",
+      noun: "a Claude connection",
+      title: null,
+      suffix: "(Claude Desktop)",
+      revertible: false,
+    });
+    expect(view.changes).toEqual([]);
+  });
+
+  it("leaves the client out when a disconnection has no name", () => {
+    const view = describeEvent(
+      event({ seq: 18, entity_type: "claude_connection", entity_id: "G2", action: "session_revoke", before: { user_id: ME.id } }),
+      ctx,
+    );
+    expect(view).toMatchObject({ verb: "disconnected", noun: "a Claude connection", suffix: "" });
+  });
 });
 
 describe("eventChanges", () => {

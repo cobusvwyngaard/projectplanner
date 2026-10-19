@@ -121,7 +121,8 @@ export type EntityType =
   | "capture"
   | "user"
   | "setting"
-  | "session";
+  | "session"
+  | "claude_connection";
 
 export type EventAction =
   | "create"

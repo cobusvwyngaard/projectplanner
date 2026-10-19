@@ -46,5 +46,6 @@ is. `auth.spec.ts` checks the cookie's flags and lifetime.
 | `canvas.spec.ts` | Dragging a note records exactly one move (checked in the item's history), resizing exactly one size change, a task dragged in from the tray is placed, and + Note twice in a row does not stack the notes |
 | `panel.spec.ts` | A due date typed with the keyboard is saved once, when whole (in whatever part order the browser uses); a half-typed date is not saved; Back on a phone saves what was typed; closing the panel returns focus to the list row or card; a done task taken off the board is not pointed to the tray |
 | `layout.spec.ts` | Who last changed a task is shown in full on its card (wide and phone screens); the Activity date filters fit a 390 px phone |
+| `claude.spec.ts` | A real OAuth connection from a local tool runs Claude's tools over a capture: the processed capture points at its run, the run shows its intent and summary in Activity, the task and note carry Claude's provenance, reverting the run removes both, and Settings › Claude connections lists the connection, disconnects it and leaves its old token answered with a 401 |
 
 Results and traces of failures go to `test-results/` (git-ignored).

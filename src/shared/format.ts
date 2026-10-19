@@ -40,6 +40,12 @@ export function formatDateTime(timestamp: string): string {
   return local ? `${formatDate(local.date)}, ${local.time}` : timestamp;
 }
 
+/** "2026-10-14T06:30:00Z" → "14 Oct 2026" in Africa/Johannesburg. */
+export function formatDay(timestamp: string): string {
+  const local = localParts(timestamp);
+  return local ? formatDate(local.date) : timestamp;
+}
+
 /**
  * How long ago, for activity rows: "just now", "5 min ago", "2 h ago" (same
  * day), "yesterday", then the date. Times in the future count as just now.

@@ -233,6 +233,20 @@ at the bottom of each section.
   `finish_run`'s summary shows in Activity.
 - **No logging of inputs.** Unexpected tool errors are logged as
   `name: message` only — never the arguments, ids or text a person wrote.
+- **Anyone can disconnect a connection, as with sessions.** Settings ›
+  Claude connections lists every live grant, whichever person allowed it,
+  and Disconnect revokes it for the whole planner. This matches the existing
+  sessions list (either person can sign another session out): one trusted
+  pair shares the board, so ending a stray or forgotten connection must not
+  depend on whose phrase it was connected with.
+- **Disconnecting is one `session_revoke` event** with
+  `entity_type = 'claude_connection'` and the grant id as the entity id.
+  The events table's `action` CHECK cannot be widened without rebuilding an
+  append-only table (SPEC 4.1), so a disconnect reuses the existing
+  `session_revoke` action — the same one the sessions list uses;
+  `entity_type` has no constraint, so the new kind is a plain string. The
+  event's `before` carries the person and the client name, which is what the
+  Activity line shows.
 
 ## Board API
 

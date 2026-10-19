@@ -19,6 +19,7 @@ import type {
   SettingKey,
   SettingsMap,
   TaskView,
+  Timestamp,
   User,
 } from "./types";
 
@@ -168,6 +169,25 @@ export interface SessionsResponse {
 // POST /api/sessions/:id/revoke     -> { ok: true }  (any active session)
 // POST /api/sessions/revoke-mine    -> { ok: true }  (every session of the signed-in user, this one included)
 // POST /api/sessions/revoke-current -> { ok: true }  (this browser; the cookie is cleared)
+
+// --- Claude connections (Settings > Claude connections) --------------------
+
+/** One OAuth grant Claude holds: who allowed it, which client, and when. */
+export interface ClaudeConnectionView {
+  /** The grant's id, which disconnect takes */
+  id: Id;
+  /** The person Claude acts for */
+  user_id: Id;
+  /** The client's own name, or "Unnamed client" */
+  client_name: string;
+  connected_at: Timestamp;
+}
+
+/** GET /api/claude-connections — every connection both users have granted, newest first */
+export interface ClaudeConnectionsResponse {
+  connections: ClaudeConnectionView[];
+}
+// POST /api/claude-connections/:userId/:grantId/disconnect -> { ok: true }
 
 // --- Activity, history, revert, runs --------------------------------------
 

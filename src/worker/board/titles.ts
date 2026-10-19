@@ -31,6 +31,7 @@ const CAPTURE_KIND: Record<Capture["kind"], string> = {
   voice: "Voice capture",
   text: "Text capture",
   file: "File capture",
+  email: "Email",
 };
 
 export function captureTitle(capture: Pick<Capture, "kind" | "text">): string {
@@ -60,12 +61,14 @@ export async function titlesFor(db: D1Database, refs: Iterable<EntityRef>): Prom
     want(link.a_type, link.a_id);
     want(link.b_type, link.b_id);
   }
-  const [notes, tasks, labels, users, captures] = await Promise.all([
+  const [notes, tasks, labels, users, captures, userEmails, attachments] = await Promise.all([
     rowsByIds(db, "note", ids.get("note") ?? []),
     rowsByIds(db, "task", ids.get("task") ?? []),
     rowsByIds(db, "label", ids.get("label") ?? []),
     rowsByIds(db, "user", ids.get("user") ?? []),
     rowsByIds(db, "capture", ids.get("capture") ?? []),
+    rowsByIds(db, "user_email", ids.get("user_email") ?? []),
+    rowsByIds(db, "attachment", ids.get("attachment") ?? []),
   ]);
 
   const titles: Record<string, string> = {};
@@ -74,6 +77,8 @@ export async function titlesFor(db: D1Database, refs: Iterable<EntityRef>): Prom
   for (const l of labels) titles[titleKey("label", l.id)] = l.name;
   for (const u of users) titles[titleKey("user", u.id)] = u.display_name;
   for (const c of captures) titles[titleKey("capture", c.id)] = captureTitle(c);
+  for (const e of userEmails) titles[titleKey("user_email", e.id)] = e.address;
+  for (const a of attachments) titles[titleKey("attachment", a.id)] = a.filename || "Attachment";
   for (const link of links) titles[titleKey("link", link.id)] = linkTitle(link, titles);
   for (const id of ids.get("setting") ?? []) titles[titleKey("setting", id)] = id;
   for (const id of ids.get("session") ?? []) titles[titleKey("session", id)] = "Browser sign-in";

@@ -228,7 +228,7 @@ interface CardProps {
 }
 
 function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, onUpdate }: CardProps) {
-  const author = users.get(capture.author_user_id)?.display_name ?? "Someone";
+  const author = capture.author_user_id === null ? "Email" : users.get(capture.author_user_id)?.display_name ?? "Someone";
   const runId = capture.processed_by_run_id ?? capture.claimed_by_run_id;
   const run = runId ? runs.get(runId) ?? detail?.runs.find((r) => r.id === runId) : undefined;
   const actorName = run?.user_id ? users.get(run.user_id)?.display_name : undefined;

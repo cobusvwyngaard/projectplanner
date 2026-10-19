@@ -1,7 +1,21 @@
 import type { ActorKind } from "../../shared/types";
+import { ForbiddenError } from "../lib/errors";
+import type { Actor } from "./actor";
 
 /** Entity types that mutate() writes. Sessions are written by auth/sessions.ts. */
-export type MutableEntity = "note" | "task" | "link" | "label" | "capture" | "user" | "setting";
+export type MutableEntity =
+  | "note"
+  | "task"
+  | "link"
+  | "label"
+  | "capture"
+  | "user"
+  | "setting"
+  | "user_email"
+  | "attachment";
+
+/** A create-only extra rule, for values the field lists cannot express. */
+type CreateRule = (actor: Actor, values: Readonly<Record<string, string | number | null>>) => void;
 
 export interface EntitySpec {
   table: string;
@@ -23,6 +37,8 @@ export interface EntitySpec {
   createOnly: readonly string[];
   /** Actor kinds that may create rows */
   creators: readonly ActorKind[];
+  /** Extra rule checked when creating, after the field lists above */
+  checkCreate?: CreateRule;
 }
 
 const NONE: readonly string[] = [];
@@ -94,6 +110,8 @@ export const ENTITIES: Readonly<Record<MutableEntity, EntitySpec>> = {
       "transcript_status", "transcript_error", "transcribe_attempts", "transcribe_next_at",
       "inbox_status", "claimed_by_run_id", "claimed_at", "processed_by_run_id", "processed_at",
       "processing_note", "created_at",
+      "email_subject", "email_from", "email_to_json", "email_cc_json", "email_participants_json",
+      "email_message_id", "email_sender_verified",
     ],
     hidden: ["transcript_json"],
     touch: null,
@@ -106,7 +124,7 @@ export const ENTITIES: Readonly<Record<MutableEntity, EntitySpec>> = {
         "processed_by_run_id", "processed_at", "processing_note",
       ],
       system: [
-        "text", "transcript_json", "transcript_status", "transcript_error",
+        "author_user_id", "text", "transcript_json", "transcript_status", "transcript_error",
         "duration_s", "inbox_status", "claimed_by_run_id", "claimed_at",
       ],
     },
@@ -115,9 +133,24 @@ export const ENTITIES: Readonly<Record<MutableEntity, EntitySpec>> = {
       transcript_json: null, transcript_status: "n/a", transcript_error: null, transcribe_attempts: 0,
       transcribe_next_at: null, inbox_status: "new", claimed_by_run_id: null, claimed_at: null,
       processed_by_run_id: null, processed_at: null, processing_note: null,
+      email_subject: null, email_from: null, email_to_json: null, email_cc_json: null,
+      email_participants_json: null, email_message_id: null, email_sender_verified: null,
     },
-    createOnly: ["kind", "author_user_id", "r2_key", "mime", "duration_s", "transcript_status", "inbox_status"],
-    creators: ["human"],
+    createOnly: [
+      "kind", "author_user_id", "r2_key", "mime", "duration_s", "transcript_status", "inbox_status",
+      "email_subject", "email_from", "email_to_json", "email_cc_json", "email_participants_json",
+      "email_message_id", "email_sender_verified",
+    ],
+    // People create text/voice/file captures; the system creates email captures
+    // (no person is signed in when mail arrives). Claude creates nothing.
+    creators: ["human", "system"],
+    checkCreate: (actor, values) => {
+      if (actor.kind === "system") {
+        if (values.kind !== "email") throw new ForbiddenError("The system can only create email captures.");
+      } else if (values.kind === "email") {
+        throw new ForbiddenError("People cannot create email captures.");
+      }
+    },
   },
   user: {
     table: "users",
@@ -142,6 +175,36 @@ export const ENTITIES: Readonly<Record<MutableEntity, EntitySpec>> = {
     defaults: { value_json: "null" },
     createOnly: ["key"],
     creators: ["human"],
+  },
+  user_email: {
+    table: "user_emails",
+    key: "id",
+    columns: ["id", "user_id", "address", "created_at", "archived_at"],
+    hidden: NONE,
+    touch: null,
+    archive: "archived_at",
+    // Addresses are added and archived, never edited: a changed address is a
+    // new row, so the history shows who added it.
+    writable: { human: NONE, claude: NONE, system: NONE },
+    defaults: { user_id: "", address: "", archived_at: null },
+    createOnly: ["user_id", "address"],
+    creators: ["human"],
+  },
+  attachment: {
+    table: "capture_attachments",
+    key: "id",
+    columns: ["id", "capture_id", "filename", "mime", "size_bytes", "r2_key", "too_large", "created_at"],
+    hidden: NONE,
+    touch: null,
+    archive: null,
+    // Written once, by the system, when an email is read; nothing else writes.
+    writable: { human: NONE, claude: NONE, system: NONE },
+    defaults: {
+      capture_id: "", filename: "", mime: "application/octet-stream", size_bytes: 0,
+      r2_key: null, too_large: 0,
+    },
+    createOnly: ["capture_id", "filename", "mime", "size_bytes", "r2_key", "too_large"],
+    creators: ["system"],
   },
 };
 

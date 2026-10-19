@@ -12,7 +12,7 @@ import { actorOf, mutationResponse, queryParams } from "./request";
 import { captureKey } from "../captures/storage";
 import { transcribeCapture } from "../captures/transcribe";
 import { reset as resetLease } from "../captures/lease";
-import { rowsByIds, selectEvents } from "../board/queries";
+import { attachmentsForCapture, rowsByIds, selectEvents } from "../board/queries";
 import { titlesFor } from "../board/titles";
 import { ulid } from "../lib/ulid";
 import type { Capture } from "../../shared/types";
@@ -230,9 +230,12 @@ export const capturesRouter = new Hono<AppBindings>()
       db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE entity_type = 'capture' AND entity_id = ? ORDER BY seq`).bind(id),
     );
 
+    const attachments = capture.kind === "email" ? await attachmentsForCapture(db, id) : [];
+
     const body: CaptureDetailResponse = {
       capture,
       runs,
+      attachments,
       items,
       events: ownEvents,
     };

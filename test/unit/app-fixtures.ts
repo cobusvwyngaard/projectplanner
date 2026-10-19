@@ -72,6 +72,13 @@ export function capture(over: Partial<Capture> & { id: string }): Capture {
     processed_at: null,
     processing_note: null,
     created_at: T0,
+    email_subject: null,
+    email_from: null,
+    email_to_json: null,
+    email_cc_json: null,
+    email_participants_json: null,
+    email_message_id: null,
+    email_sender_verified: null,
     ...over,
   };
 }
@@ -98,6 +105,7 @@ export function bootstrap(over: Partial<BootstrapResponse> = {}): BootstrapRespo
   return {
     me: ME,
     users: [ME, OTHER],
+    user_emails: [],
     labels: [],
     notes: [],
     tasks: [],
@@ -117,6 +125,8 @@ export function changes(over: Partial<ChangesResponse> = {}): ChangesResponse {
     links: [],
     labels: [],
     users: [],
+    user_emails: [],
+    attachments: [],
     settings: null,
     captures: [],
     cursor: "E10",

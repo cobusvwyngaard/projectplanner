@@ -153,6 +153,9 @@ export async function closeExpiredRuns(env: { DB: D1Database }, now: Date): Prom
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
         console.error(`closeExpiredRuns ${run.id} release failed: ${e.name}: ${e.message}`);
+        // Leave the run open: its captures are still claimed by it, and the
+        // next scheduled call tries the release again.
+        continue;
       }
     }
     await env.DB

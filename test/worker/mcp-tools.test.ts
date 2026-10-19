@@ -789,6 +789,38 @@ describe("closeExpiredRuns, through runScheduled", () => {
     expect(stillOpen?.finished_at).toBeNull();
   });
 
+  it("keeps a run open when releasing its captures fails, and closes it next time", async () => {
+    const startedAt = new Date(now.getTime() - 3 * HOUR);
+    const run = await openRun(USER_1, { startedAt: startedAt.toISOString() });
+    const capture = await newCapture();
+    await claimRows([capture], run, startedAt);
+    // Stand in the way of the release: this capture may not go back to 'new'.
+    await db
+      .prepare(
+        `CREATE TRIGGER block_release BEFORE UPDATE ON captures
+         WHEN OLD.claimed_by_run_id IS NOT NULL AND NEW.claimed_by_run_id IS NULL
+         BEGIN SELECT RAISE(ABORT, 'release blocked'); END`,
+      )
+      .run();
+
+    await runScheduled(env, now);
+
+    // The run must stay unfinished, or its captures are stranded forever.
+    const held = await db.prepare(`SELECT * FROM captures WHERE id = ?`).bind(capture).first();
+    expect(held).toMatchObject({ inbox_status: "claimed", claimed_by_run_id: run });
+    const unclosed = await db.prepare(`SELECT finished_at FROM runs WHERE id = ?`).bind(run).first();
+    expect(unclosed?.finished_at).toBeNull();
+
+    // The next cron call, with the way clear, finishes the job.
+    await db.prepare(`DROP TRIGGER block_release`).run();
+    await runScheduled(env, now);
+
+    const closed = await db.prepare(`SELECT finished_at FROM runs WHERE id = ?`).bind(run).first();
+    expect(closed?.finished_at).toBe(now.toISOString());
+    const freed = await db.prepare(`SELECT * FROM captures WHERE id = ?`).bind(capture).first();
+    expect(freed).toMatchObject({ inbox_status: "new", claimed_by_run_id: null, claimed_at: null });
+  });
+
   it("closes at most 20 expired runs per call", async () => {
     const startedAt = new Date(now.getTime() - 3 * HOUR);
     for (let i = 0; i < 21; i++) {

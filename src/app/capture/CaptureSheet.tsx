@@ -43,6 +43,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
+  const [peakLevel, setPeakLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -133,6 +134,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
     revokeBlobUrl();
     setElapsed(0);
     setLevel(0);
+    setPeakLevel(0);
     chunksRef.current = [];
     if (!navigator.mediaDevices?.getUserMedia) {
       setMicError("Microphone not available. You can still upload a recording or type a note.");
@@ -185,7 +187,9 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
           const v = ((data[i] ?? 0) - 128) / 128;
           sum += v * v;
         }
-        setLevel(Math.min(1, Math.sqrt(sum / data.length) * 3));
+        const current = Math.min(1, Math.sqrt(sum / data.length) * 3);
+        setLevel(current);
+        setPeakLevel((prev) => (current > prev ? current : prev));
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
@@ -209,6 +213,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
       stopTracks();
       setRecording(false);
       setLevel(0);
+      setPeakLevel(0);
       if (discardRef.current) {
         // Cancelled: the chunks were dropped with the recording.
         discardRef.current = false;
@@ -233,6 +238,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
     recorder.start(250);
     setRecording(true);
     setElapsed(0);
+    setPeakLevel(0);
     timerRef.current = window.setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
     }, 250);
@@ -355,6 +361,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
     setBlob(null);
     revokeBlobUrl();
     setElapsed(0);
+    setPeakLevel(0);
     setMicError(null);
     setUploadError(null);
   }, [recording, stopRecording, revokeBlobUrl]);
@@ -388,7 +395,7 @@ export function CaptureSheet({ autoStart, onClose }: Props) {
             {recording && (
               <>
                 <div className="record-timer" aria-live="polite">{formatDuration(elapsed)}</div>
-                <div className="level-meter" aria-hidden="true" data-level={Math.round(level * 100)}>
+                <div className="level-meter" aria-hidden="true" data-level={Math.round(level * 100)} data-peak={Math.round(peakLevel * 100)}>
                   <div className="level-bar" style={{ width: `${Math.round(level * 100)}%` }} />
                 </div>
                 <div className="button-row">

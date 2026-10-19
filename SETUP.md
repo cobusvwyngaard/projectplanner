@@ -82,6 +82,14 @@ paste them into a chat, and do not put them in `wrangler.jsonc`.
 `ELEVENLABS_API_KEY` is only used for transcription (phase 2); you may set it
 later.
 
+### Transcription (ElevenLabs)
+
+- Create an API key at elevenlabs.io (Profile → API keys) with speech-to-text access.
+- Set it with `npx wrangler secret put ELEVENLABS_API_KEY` or in the dashboard (Worker → Settings → Variables and Secrets, type Secret).
+- What happens without it: recordings are stored, and the Inbox shows a "Transcription is not set up" banner; transcription can be retried after the key is set.
+- The keyterm setting (Settings → Transcription): names to help recognition; ElevenLabs bills it extra; it is off by default.
+- Failed transcriptions are retried automatically every 10 minutes, up to 5 attempts, and can be retried by hand from the Inbox.
+
 ### Which phrase is which person
 
 | Secret | Signs in as | User id | Name at first |
@@ -128,6 +136,15 @@ On an iPhone, the planner added to the home screen may keep its own cookies,
 separate from Safari. You may then need to enter your phrase once more in the
 home-screen app, even though Safari is already signed in **(unverified on a
 device; SPEC section 10)**.
+
+## After deploying phase 2
+
+After deploying phase 2, do these checks on the live site:
+
+- [ ] Record a voice note on an iPhone (Safari, audio/mp4) and check that it transcribes.
+- [ ] Record a voice note on Android (Chrome, audio/webm) and check that it transcribes.
+- [ ] Upload a 10-minute recording and check that it transcribes (long files may only finish on the 10-minute retry).
+- [ ] On iPhone, a home-screen app may need the phrase entered once more.
 
 ## 7. Connect Claude
 

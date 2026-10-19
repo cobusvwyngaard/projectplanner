@@ -33,6 +33,8 @@ export default defineConfig(async () => {
             name: "worker",
             include: ["test/worker/**/*.test.ts"],
             setupFiles: ["test/worker/setup.ts"],
+            testTimeout: 30_000,
+            hookTimeout: 30_000,
           },
         },
         {

@@ -54,7 +54,8 @@ src/worker/
   api/                 Hono routers for /api/*, one file per area
   board/               read models: board queries, provenance badges, activity
                        and history, runs, titles, field rules, placement of new notes
-  captures/            upload, R2 storage, transcription, audio streaming (phase 2)
+  captures/            upload, R2 storage, transcription, audio streaming with Range support, cron retry
+  api/captures.ts       captures API routes (create/upload/transcribe/edit/ignore/retry/audio)
   mcp/                 PlannerMcp agent and one module per tool group (phase 3)
 src/app/               React SPA (Vite); index.html at the repo root
   main.tsx, App.tsx    entry (starts the store) and the shell: header, nav, panel, toasts
@@ -63,11 +64,13 @@ src/app/               React SPA (Vite); index.html at the repo root
                        items, list tabs, events in words, activity paging
   board/ list/ panel/  the canvas, the List view and the item panel
   activity/ settings/  the Activity and Settings views
+  inbox/               Inbox view (captures)
+  capture/             Capture sheet (record/upload/text), AudioPlayer
   components/          chips, badges, times, event rows and Revert
   styles.css           all app styles; board/board.css loads with the canvas
 static/                files copied as-is into the build (favicon.svg; the PWA
                        manifest, sw.js and icons come with the capture phase)
-scripts/e2e-server.sh  wrangler dev on port 8788 with a fresh local database
+scripts/e2e-server.mjs wrangler dev on port 8788 with a fresh local database
 test/worker/           Vitest inside workerd (real D1/R2/DO via Miniflare)
 test/unit/             Vitest under Node (pure functions, source scans)
 test/helpers/          shared test helpers
@@ -153,10 +156,10 @@ each note/task (`src/worker/board/provenance.ts`), returned as `prov` on
 
 - React 19 + Vite, `@xyflow/react` for the canvas. No other UI libraries.
   The canvas is loaded lazily, with its own stylesheet.
-- Path routes: `/board`, `/list`, `/activity`, `/settings` (and `/inbox` in
-  phase 2). `/` opens the board on wide screens and the list on phones
+- Path routes: `/board`, `/list`, `/activity`, `/settings`, `/inbox`, `/capture`. `/` opens the board on wide screens and the list on phones
   (< 768 px). The item panel is `?item=note:<id>` or `?item=task:<id>` on
   any route: a drawer on wide screens, a full-screen sheet on phones.
+  Captures reach the browser through the change feed (`events` + current capture rows); the Inbox and capture sheet update via that data.
 - `src/app/api.ts` wraps fetch: JSON in/out, `ApiError` on failure, and a
   401 sends the browser to `/login?next=<current path and query>`.
 - `src/app/store.ts` holds bootstrap state, applies mutation responses and
@@ -188,5 +191,5 @@ tests serve the fixed files in `test/fixtures/client` as the app's static
 assets (`miniflare.assets.directory`), so they do not depend on a build.
 
 The Playwright smoke tests (`e2e/`, see `e2e/README.md`) start
-`scripts/e2e-server.sh`: a fresh local D1 in `.wrangler/e2e`, migrations
+`scripts/e2e-server.mjs`: a fresh local D1 in `.wrangler/e2e`, migrations
 applied, then `wrangler dev` on port 8788, which builds the app first.

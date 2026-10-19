@@ -329,7 +329,7 @@ at the bottom of each section.
   On phones every control is at least 44 px; radio chips and swatches are
   real inputs covering the visible chip.
 - **Smoke tests** run `wrangler dev` on port 8788 with a fresh database in
-  `.wrangler/e2e` (`scripts/e2e-server.sh`) and sign in with the phrases
+  `.wrangler/e2e` (`scripts/e2e-server.mjs`) and sign in with the phrases
   from `.dev.vars`; see `e2e/README.md`.
 
 ## Capture and transcription

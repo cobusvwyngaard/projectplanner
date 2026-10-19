@@ -13,7 +13,7 @@ Playwright's default folder (as in the development container). Elsewhere run
 
 ## How it runs
 
-- `playwright.config.ts` starts `scripts/e2e-server.sh`, which deletes
+- `playwright.config.ts` starts `scripts/e2e-server.mjs`, which deletes
   `.wrangler/e2e`, applies the D1 migrations there and runs
   `wrangler dev --local --port 8788 --persist-to .wrangler/e2e`. Wrangler
   builds the app first (the `build` command in `wrangler.jsonc`), so the tests

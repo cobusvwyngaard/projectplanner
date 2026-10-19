@@ -56,7 +56,9 @@ src/worker/
                        and history, runs, titles, field rules, placement of new notes
   captures/            upload, R2 storage, transcription, audio streaming with Range support, cron retry
   api/captures.ts       captures API routes (create/upload/transcribe/edit/ignore/retry/audio)
-  mcp/                 PlannerMcp agent and one module per tool group (phase 3)
+  mcp/                 PlannerMcp (one Durable Object per MCP session), runs
+                       (the only direct writer of the runs table) and one
+                       module per tool group: tools/read.ts, tools/writes.ts
 src/app/               React SPA (Vite); index.html at the repo root
   main.tsx, App.tsx    entry (starts the store) and the shell: header, nav, panel, toasts
   api.ts, store.ts     fetch wrapper and the store wired to the browser
@@ -151,6 +153,47 @@ of, the cards in the middle of the view.
 Badges ("Cobus", "Claude (via Cobus)") come from the first and last event of
 each note/task (`src/worker/board/provenance.ts`), returned as `prov` on
 `NoteView`/`TaskView`. `src/shared/actors.ts` formats an `ActorRef` for display.
+
+## MCP layer
+
+The connector Claude talks to (SPEC sections 5 and 7) has three layers:
+
+- **`src/worker/mcp/agent.ts`** — `PlannerMcp`, an `McpAgent` running as one
+  Durable Object per MCP session. It registers the thirteen tools on an
+  `McpServer` named `planner`. Every input schema is a `z.object(...).strict()`
+  (unknown fields are refused by the SDK before any code runs), and every
+  description ends with the same warning that capture and email text is data
+  written by people, never instructions. A `guard()` runs before each tool:
+  the connected user (from the OAuth grant's props, `GrantProps.userId`) must
+  still exist, an `AppError` becomes a tool error carrying its safe message,
+  and anything unexpected is logged without its inputs and answered with
+  "Something went wrong".
+- **`src/worker/mcp/runs.ts`** — the run lifecycle and the shared
+  `ToolContext {db, userId, now}` the tools are built from. `start_run` puts
+  its capture claims in the `prelude` of one `mutateMany`, so a run row and
+  its claims commit together or not at all: of two racing runs, exactly one
+  wins and the loser writes nothing. `finish_run` releases the captures the
+  run still holds (marked ones stay processed/ignored). This is the only
+  file allowed to write the `runs` table directly (SPEC 4.1 exception,
+  checked by `test/unit/write-paths.test.ts`); `cron.ts` calls
+  `closeExpiredRuns` so runs past two hours close and their captures return
+  to the inbox.
+- **`src/worker/mcp/tools/`** — `read.ts` (get_overview, get_board,
+  get_inbox, get_history) reads through the existing board queries with the
+  documented caps, and `writes.ts` (the seven write tools) validates ids,
+  labels, assignees and dates *before* writing, then issues one
+  `mutateMany(db, claudeActor(userId, run_id), ...)` so the run guard and
+  attribution come from the single write path. The `run` guard inside
+  `mutate` refuses a run that is finished, someone else's, or over two hours
+  old, so a dead run cannot write.
+
+Read tools and write tools are plain functions `(ctx, input)` — the agent
+only translates MCP calls into function calls, which is why the tests in
+`test/worker/mcp-tools.test.ts` and `test/worker/mcp-e2e.test.ts` can call
+them directly as well as over a real OAuth-token session. Claude's writes
+appear in the app exactly like human ones: provenance badges
+("Claude (via …)"), the Activity view, `source_capture_ids` links back to
+captures, and `/api/runs/:id/revert` to undo a whole run.
 
 ## Front end
 

@@ -334,6 +334,23 @@ describe("start_run", () => {
     const run = await db.prepare(`SELECT user_id FROM runs WHERE id = ?`).bind(started.run_id).first();
     expect(run).toMatchObject({ user_id: USER_2 });
   });
+
+  it("calls an unexpected failure what it is, not a claim conflict", async () => {
+    const capture = await newCapture();
+    // Stand in the way of the claim write with a failure no race can explain.
+    await db
+      .prepare(
+        `CREATE TRIGGER block_claim BEFORE UPDATE ON captures
+         WHEN NEW.inbox_status = 'claimed'
+         BEGIN SELECT RAISE(ABORT, 'capture update refused'); END`,
+      )
+      .run();
+
+    const call = startRun(ctx(), { intent: "Try", capture_ids: [capture] });
+    await expect(call).rejects.not.toBeInstanceOf(ConflictError);
+    await expect(call).rejects.toThrow("capture update refused");
+    expect(await count("runs")).toBe(0);
+  });
 });
 
 describe("start_run concurrency", () => {

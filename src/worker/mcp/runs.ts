@@ -88,8 +88,13 @@ export async function startRun(
   ];
   try {
     await mutateMany(db, claudeActor(userId, runId), ops, { prelude, now });
-  } catch {
-    throw new ConflictError("Some of those captures were just claimed by another run.");
+  } catch (err) {
+    // Only a claim conflict (a refused claim or a stale expect on the capture)
+    // means another run got there first; every other error reaches the caller.
+    if (err instanceof ConflictError) {
+      throw new ConflictError("Some of those captures were just claimed by another run.");
+    }
+    throw err;
   }
   return { run_id: runId, claimed: [...ids], expires_at: iso(addMs(now, RUN_MAX_AGE_MS)) };
 }

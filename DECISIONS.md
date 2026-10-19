@@ -442,6 +442,12 @@ at the bottom of each section.
   thousands of rows. A raw message over 25 MB is refused, which matches Email
   Routing's own ceiling. The listing is what the person sees, so an attachment
   whose content was not kept is still shown rather than disappearing.
+- **A download is served as data.** The attachment route sends
+  `Content-Disposition: attachment`, `Content-Security-Policy: sandbox` and
+  `Cache-Control: no-store` (and the security middleware adds
+  `X-Content-Type-Options: nosniff`), so a file the browser renders, such as an
+  HTML or SVG attachment, cannot act as the planner's origin, and a private
+  file is never cached.
 - **The raw message is stored before its capture.** If the capture insert then
   fails, R2 holds an object that no row points at. The cron looks for captures,
   not objects, so that message is lost; with two people and a healthy D1 this

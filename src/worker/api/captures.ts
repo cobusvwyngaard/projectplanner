@@ -318,7 +318,10 @@ async function downloadAttachment(c: Context<AppBindings>): Promise<Response> {
   headers.set("Content-Type", attachment.mime);
   headers.set("Content-Length", String(object.size));
   headers.set("Content-Disposition", attachmentDisposition(attachment.filename));
-  headers.set("Cache-Control", "private, max-age=3600");
+  // A download is data, not a page: never cache it, and sandbox it so a file
+  // that a browser renders (an HTML or SVG attachment) cannot act as this site.
+  headers.set("Content-Security-Policy", "sandbox");
+  headers.set("Cache-Control", "no-store");
   return new Response(object.body, { status: 200, headers });
 }
 

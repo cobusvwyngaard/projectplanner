@@ -5,7 +5,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { asUser } from "../helpers/api";
-import { call } from "../helpers/auth";
+import { call, signIn, withSession } from "../helpers/auth";
 import { freshDb, USER_1 } from "../helpers/db";
 
 const TS = "2026-10-01T00:00:00.000Z";
@@ -54,7 +54,20 @@ describe("attachment downloads", () => {
     expect(res.headers.get("Content-Disposition")).toBe(
       `attachment; filename="report.txt"; filename*=UTF-8''report.txt`,
     );
-    expect(res.headers.get("Cache-Control")).toBe("private, max-age=3600");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(await res.text()).toBe(CONTENT);
+  });
+
+  it("carries the headers a stored file needs, through the whole Worker", async () => {
+    const session = await signIn();
+    const res = await call("/api/captures/c1/attachments/a1", { headers: withSession(session) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Disposition")).toBe(
+      `attachment; filename="report.txt"; filename*=UTF-8''report.txt`,
+    );
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Content-Security-Policy")).toBe("sandbox");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(await res.text()).toBe(CONTENT);
   });
 

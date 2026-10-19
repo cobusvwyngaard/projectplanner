@@ -1,5 +1,7 @@
-// Settings (SPEC 8): labels, people, transcription and signed-in browsers.
+// Settings (SPEC 8): labels, people, transcription, signed-in browsers and
+// Claude connections.
 
+import { ClaudeSection } from "./ClaudeSection";
 import { LabelsSection } from "./LabelsSection";
 import { PeopleSection } from "./PeopleSection";
 import { SessionsSection } from "./SessionsSection";
@@ -15,6 +17,7 @@ export function SettingsView() {
       <PeopleSection />
       <TranscriptionSection />
       <SessionsSection />
+      <ClaudeSection />
     </div>
   );
 }

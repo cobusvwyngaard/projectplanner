@@ -153,16 +153,26 @@ After deploying phase 2, do these checks on the live site:
 Each person connects their **own** claude.ai account to the planner; the
 connector then acts for whoever connected it. Do this once per person:
 
-1. In claude.ai, open **Settings → Connectors → Add custom connector**
-   **(unverified: menu names — claude.ai may call this Customize →
-   Connectors)**.
-2. Give it any name (for example `planner`) and the remote MCP server URL:
-   `https://<your planner address>/mcp` — the same address you sign in at.
-3. Press **Connect**. Claude opens the planner in a new tab and asks for the
-   phrase page: type **your** login phrase (each person uses their own
-   phrase, never the other's) and press **Allow**.
-4. You land back in claude.ai with the `planner` tools available. Verify by
-   asking Claude to call `get_overview`: it should return your display name.
+1. Sign in to the planner in the browser you use for claude.ai, with
+   **your** phrase. If someone else is signed in there, sign out first: the
+   connection acts for whoever is signed in when you press Allow.
+2. In claude.ai, open **Customize → Connectors** (claude.ai/customize/connectors),
+   press **+** and choose **Add custom connector**. This is the path in
+   Anthropic's help centre for Free, Pro and Max plans (Free allows one custom
+   connector); on Team and Enterprise an owner adds it under Organization
+   settings → Connectors first.
+3. Name it `planner` and give the remote MCP server URL
+   `https://<your planner address>/mcp`. Leave **Advanced settings** empty
+   (claude.ai registers itself). Press **Add**, then **Connect**.
+4. The planner opens and asks "Allow access?". Check that it names **you**,
+   then press **Allow**. Without a planner session you get the phrase page
+   first.
+5. Back in claude.ai, turn the connector on in a chat (**+** → Connectors) and
+   ask Claude to call `get_overview`: it should return your display name. The
+   connection now shows in the planner under **Settings → Claude connections**.
+
+Opening `/mcp` directly in a browser gives an empty 401 page: that address is
+only for Claude, which sends a token with every request.
 
 Notes:
 

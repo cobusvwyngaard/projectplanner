@@ -15,6 +15,10 @@ import { htmlToText } from "./body";
 export const MAX_ATTACHMENTS = 20;
 /** An attachment larger than this is listed but its content is not stored. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+/** A body longer than this is cut, so one email cannot fill the row. */
+export const MAX_BODY_CHARS = 100_000;
+
+const CUT_NOTE = "\n[…cut: the email is longer]";
 
 const MISSING_ERROR = "The email could not be found.";
 const UNREADABLE_ERROR = "The email could not be read.";
@@ -54,7 +58,7 @@ export async function readEmail(env: Pick<AppEnv, "DB" | "AUDIO">, id: string, n
       return markFailed(db, id, row, UNREADABLE_ERROR);
     }
 
-    const text = parsed.text ?? (parsed.html ? htmlToText(parsed.html) : "");
+    const text = cutText(parsed.text ?? (parsed.html ? htmlToText(parsed.html) : ""));
     const attachments = await storeAttachments(env, id, parsed.attachments);
     await mutateMany(db, SYSTEM_ACTOR, [
       ...attachments,
@@ -122,6 +126,12 @@ async function storeAttachments(
 
 function mimeOf(attachment: Attachment): string {
   return attachment.mimeType || "application/octet-stream";
+}
+
+/** A body longer than MAX_BODY_CHARS keeps its first part and a note saying so. */
+function cutText(text: string): string {
+  if (text.length <= MAX_BODY_CHARS) return text;
+  return text.slice(0, MAX_BODY_CHARS) + CUT_NOTE;
 }
 
 function attachmentBytes(attachment: Attachment): Uint8Array {

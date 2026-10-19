@@ -4,7 +4,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PostalMime from "postal-mime";
-import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, readEmail } from "../../src/worker/email/read";
+import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, MAX_BODY_CHARS, readEmail } from "../../src/worker/email/read";
 import { runScheduled } from "../../src/worker/cron";
 import { allEvents, eventsFor, freshDb, USER_1 } from "../helpers/db";
 
@@ -149,6 +149,22 @@ describe("readEmail: the body", () => {
     );
     await readEmail(env, "c2");
     expect((await capture("c2"))?.text).toBe("Hello there\n\nSecond line");
+  });
+
+  it("cuts a body over the limit and says so", async () => {
+    await putEmail("c10", textMessage("a".repeat(MAX_BODY_CHARS + 1)));
+    await readEmail(env, "c10");
+    expect((await capture("c10"))?.text).toBe("a".repeat(MAX_BODY_CHARS) + "\n[…cut: the email is longer]");
+  });
+
+  it("leaves a body at exactly the limit unchanged", async () => {
+    // The parser turns a simple message's closing CRLF into one newline, so
+    // 99 999 typed characters make a body of exactly MAX_BODY_CHARS.
+    await putEmail("c11", textMessage("a".repeat(MAX_BODY_CHARS - 1)));
+    await readEmail(env, "c11");
+    const text = (await capture("c11"))?.text ?? "";
+    expect(text.length).toBe(MAX_BODY_CHARS);
+    expect(text).toBe("a".repeat(MAX_BODY_CHARS - 1) + "\n");
   });
 
   it("leaves a capture that is not an email alone", async () => {

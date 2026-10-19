@@ -47,6 +47,8 @@ and use these build settings:
 
 These are the settings under the Worker → Settings → Build. "Retry build" rebuilds the same commit; to deploy new code, push a commit to the production branch.
 
+If a push to `main` brings no new build, the repository is probably not connected: check Settings → Build → Git repository (it should name `cobusvwyngaard/projectplanner`) and reconnect it if needed. Failed builds appear in the build history, not under Deployments.
+
 **(unverified)** The Worker's name in the dashboard must be `projectplanner`,
 the `name` in `wrangler.jsonc`, and the build's API token needs permission to
 edit D1 as well as Workers, because the deploy command applies migrations.

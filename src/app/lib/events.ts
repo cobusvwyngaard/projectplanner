@@ -330,6 +330,7 @@ export function eventTitle(event: PlannerEvent, titles: Readonly<Record<string, 
 
 export function describeEvent(event: PlannerEvent, ctx: DescribeContext): EventView {
   if (event.entity_type === "user_email") return describeUserEmail(event, ctx);
+  if (event.entity_type === "attachment") return describeAttachment(event, ctx);
   const { verb, suffix } = verbFor(event);
   const session = event.entity_type === "session";
   return {
@@ -368,46 +369,21 @@ function describeUserEmail(event: PlannerEvent, ctx: DescribeContext): EventView
 }
 
 /**
- * The attachment events of one email in one sentence ("Planner listed an
- * attachment (notes.pdf) on an email"): the email's title, when the screen
- * knows it, comes before "on an email".
+ * "Planner listed an attachment (notes.pdf) on an email": the email's title,
+ * when the screen knows it, comes before "on an email". An attachment event
+ * cannot be reverted (the row has nothing to archive).
  */
-function listedAttachments(rows: readonly PlannerEvent[], ctx: DescribeContext): EventView {
-  const first = rows[0];
-  if (!first) throw new Error("listedAttachments needs at least one event");
-  const captureId = typeof first.after?.capture_id === "string" ? first.after.capture_id : first.entity_id;
-  const title = ctx.titles[`capture:${captureId}`] ?? null;
-  const names = rows.map((row) => (typeof row.after?.filename === "string" && row.after.filename !== "" ? row.after.filename : "Attachment"));
-  const what = rows.length === 1 ? "an attachment" : `${rows.length} attachments`;
+function describeAttachment(event: PlannerEvent, ctx: DescribeContext): EventView {
+  const captureId = typeof event.after?.capture_id === "string" ? event.after.capture_id : event.entity_id;
+  const filename = event.after?.filename;
+  const name = typeof filename === "string" && filename !== "" ? filename : "Attachment";
   return {
-    actor: actorLabel(eventActor(first), ctx.users),
+    actor: actorLabel(eventActor(event), ctx.users),
     verb: "listed",
-    noun: `${what} (${names.join(", ")})`,
-    title,
+    noun: `an attachment (${name})`,
+    title: ctx.titles[`capture:${captureId}`] ?? null,
     suffix: "on an email",
     changes: [],
     revertible: false,
   };
-}
-
-/** The events of the screen as one sentence each, in the order given. */
-export function eventSentences(events: readonly PlannerEvent[], ctx: DescribeContext): EventView[] {
-  const views: EventView[] = [];
-  let attachmentRows: PlannerEvent[] = [];
-  const flush = () => {
-    if (attachmentRows.length === 0) return;
-    views.push(listedAttachments(attachmentRows, ctx));
-    attachmentRows = [];
-  };
-  for (const event of events) {
-    // Several attachments listed at once are one sentence; anything else ends the run.
-    if (event.entity_type === "attachment") {
-      attachmentRows.push(event);
-      continue;
-    }
-    flush();
-    views.push(describeEvent(event, ctx));
-  }
-  flush();
-  return views;
 }

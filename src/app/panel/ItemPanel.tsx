@@ -8,7 +8,7 @@ import { actorLabel, eventActor } from "../../shared/actors";
 import type { ItemRef, NoteView, PlannerEvent, TaskView } from "../../shared/types";
 import { setArchived, setTaskDone, unplaceTask, updateNote, updateTask } from "../actions";
 import { api, errorMessage } from "../api";
-import { EventEntries } from "../components/events";
+import { EventEntry } from "../components/events";
 import { BackIcon, CloseIcon } from "../components/icons";
 import { ProvenanceLine, TimeAgo } from "../components/ui";
 import { useIsPhone } from "../hooks";
@@ -276,15 +276,27 @@ function History({ item, history, onReverted }: { item: ItemRef; history: Histor
   );
   const newestFirst = useMemo(() => [...history.events].reverse(), [history.events]);
   if (newestFirst.length === 0) return <p className="muted small">No changes recorded yet.</p>;
-  const isSelf = (event: PlannerEvent) => event.entity_type === item.type && event.entity_id === item.id;
-  const openFor = (event: PlannerEvent): ItemRef | undefined => {
-    if (isSelf(event) || (event.entity_type !== "note" && event.entity_type !== "task")) return undefined;
-    const other: ItemRef = { type: event.entity_type, id: event.entity_id };
-    return liveTitle(other, { notes, tasks }) !== null ? other : undefined;
-  };
   return (
     <ol className="timeline">
-      <EventEntries events={newestFirst} ctx={ctx} extras={extras} onReverted={onReverted} selfFor={isSelf} open={openFor} />
+      {newestFirst.map((event) => {
+        const self = event.entity_type === item.type && event.entity_id === item.id;
+        const other: ItemRef | null =
+          !self && (event.entity_type === "note" || event.entity_type === "task")
+            ? { type: event.entity_type, id: event.entity_id }
+            : null;
+        const canOpen = other !== null && liveTitle(other, { notes, tasks }) !== null;
+        return (
+          <EventEntry
+            key={event.id}
+            event={event}
+            ctx={ctx}
+            extras={extras}
+            self={self}
+            open={canOpen && other ? other : undefined}
+            onReverted={onReverted}
+          />
+        );
+      })}
     </ol>
   );
 }

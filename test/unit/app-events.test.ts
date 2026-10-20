@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeEvent, eventChanges, eventSentences, fieldLabel, isRevertible, type DescribeContext } from "../../src/app/lib/events";
+import { describeEvent, eventChanges, fieldLabel, isRevertible, type DescribeContext } from "../../src/app/lib/events";
 import { ME, OTHER, event, label } from "./app-fixtures";
 
 const ctx: DescribeContext = {
@@ -102,76 +102,86 @@ describe("describeEvent", () => {
   });
 });
 
-describe("eventSentences", () => {
+describe("describeEvent email addresses", () => {
   it("says a person added an email address for another person", () => {
-    const [view] = eventSentences(
-      [
-        event({
-          seq: 40,
-          entity_type: "user_email",
-          entity_id: "M1",
-          action: "create",
-          after: { user_id: OTHER.id, address: "anna@example.com" },
-        }),
-      ],
+    const view = describeEvent(
+      event({
+        seq: 40,
+        entity_type: "user_email",
+        entity_id: "M1",
+        action: "create",
+        after: { user_id: OTHER.id, address: "anna@example.com" },
+      }),
       ctx,
     );
     expect(view).toMatchObject({ actor: "Cobus", verb: "added", noun: "an email address for Anna (anna@example.com)", title: null, suffix: "" });
-    expect(view?.changes).toEqual([]);
+    expect(view.changes).toEqual([]);
   });
 
   it("says a person removed an email address for another person", () => {
-    const [view] = eventSentences(
-      [
-        event({
-          seq: 41,
-          entity_type: "user_email",
-          entity_id: "M1",
-          action: "archive",
-          before: { user_id: ME.id, address: "cobus@example.com" },
-        }),
-      ],
+    const view = describeEvent(
+      event({
+        seq: 41,
+        entity_type: "user_email",
+        entity_id: "M1",
+        action: "archive",
+        before: { user_id: ME.id, address: "cobus@example.com" },
+      }),
       ctx,
     );
     expect(view).toMatchObject({ actor: "Cobus", verb: "removed", noun: "an email address for Cobus (cobus@example.com)" });
-    expect(view?.revertible).toBe(false);
+    expect(view.revertible).toBe(false);
   });
+});
 
+describe("describeEvent attachments", () => {
   it("says the planner listed an attachment on an email", () => {
-    const [view] = eventSentences(
-      [
-        event({
-          seq: 42,
-          actor_kind: "system",
-          actor_user_id: null,
-          entity_type: "attachment",
-          entity_id: "A1",
-          action: "create",
-          after: { capture_id: "C9", filename: "notes.pdf" },
-        }),
-      ],
+    const view = describeEvent(
+      event({
+        seq: 42,
+        actor_kind: "system",
+        actor_user_id: null,
+        entity_type: "attachment",
+        entity_id: "A1",
+        action: "create",
+        after: { capture_id: "C9", filename: "notes.pdf" },
+      }),
       ctx,
     );
-    expect(view).toMatchObject({ actor: "System", verb: "listed", noun: "an attachment (notes.pdf)", title: null, suffix: "on an email" });
-    expect(view?.changes).toEqual([]);
+    expect(view).toMatchObject({ actor: "System", verb: "listed", noun: "an attachment (notes.pdf)", title: null, suffix: "on an email", revertible: false });
+    expect(view.changes).toEqual([]);
   });
 
-  it("groups the attachments of an email into one sentence", () => {
-    const [view] = eventSentences(
-      [
-        event({ seq: 43, actor_kind: "system", actor_user_id: null, entity_type: "attachment", entity_id: "A1", action: "create", after: { capture_id: "C9", filename: "notes.pdf" } }),
-        event({ seq: 44, actor_kind: "system", actor_user_id: null, entity_type: "attachment", entity_id: "A2", action: "create", after: { capture_id: "C9", filename: "map.png" } }),
-      ],
+  it("names an attachment without a file name as \"Attachment\"", () => {
+    const view = describeEvent(
+      event({
+        seq: 43,
+        actor_kind: "system",
+        actor_user_id: null,
+        entity_type: "attachment",
+        entity_id: "A2",
+        action: "create",
+        after: { capture_id: "C9", filename: "" },
+      }),
+      ctx,
+    );
+    expect(view).toMatchObject({ verb: "listed", noun: "an attachment (Attachment)", suffix: "on an email", revertible: false });
+  });
+
+  it("shows the email's title when the screen knows it", () => {
+    const view = describeEvent(
+      event({
+        seq: 44,
+        actor_kind: "system",
+        actor_user_id: null,
+        entity_type: "attachment",
+        entity_id: "A3",
+        action: "create",
+        after: { capture_id: "C9", filename: "map.png" },
+      }),
       { ...ctx, titles: { "capture:C9": "Trip planning" } },
     );
-    expect(view).toMatchObject({
-      actor: "System",
-      verb: "listed",
-      noun: "2 attachments (notes.pdf, map.png)",
-      title: "Trip planning",
-      suffix: "on an email",
-    });
-    expect(view?.changes).toEqual([]);
+    expect(view).toMatchObject({ noun: "an attachment (map.png)", title: "Trip planning", suffix: "on an email" });
   });
 });
 

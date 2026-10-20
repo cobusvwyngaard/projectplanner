@@ -8,7 +8,7 @@ import { actorLabel } from "../../shared/actors";
 import { formatDateTime } from "../../shared/format";
 import type { Id, ItemRef, PlannerEvent } from "../../shared/types";
 import { api, errorMessage } from "../api";
-import { EventEntries, RevertButton, RevertConflicts, useRevert } from "../components/events";
+import { EventEntry, RevertButton, RevertConflicts, useRevert } from "../components/events";
 import type { DescribeContext } from "../lib/events";
 import {
   NO_FILTERS,
@@ -92,6 +92,7 @@ function opens(event: PlannerEvent): ItemRef | undefined {
   const type = event.entity_type;
   return type === "note" || type === "task" ? { type, id: event.entity_id } : undefined;
 }
+
 function ChangesFeed({
   filters,
   onFilters,
@@ -246,14 +247,17 @@ function ChangesFeed({
       )}
       {feed && feed.events.length > 0 && (
         <ol className="feed" aria-label="Changes, newest first">
-          <EventEntries
-            events={feed.events}
-            ctx={ctx}
-            extras={feed}
-            open={opens}
-            onRunClick={onShowRun}
-            onReverted={refresh}
-          />
+          {feed.events.map((event) => (
+            <EventEntry
+              key={event.id}
+              event={event}
+              ctx={ctx}
+              extras={feed}
+              open={opens(event)}
+              onRunClick={onShowRun}
+              onReverted={refresh}
+            />
+          ))}
         </ol>
       )}
       {feed && feed.next !== null && (

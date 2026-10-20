@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react";
 import type { RevertConflictView, RevertResponse } from "../../shared/api";
 import type { Capture, Id, ItemRef, PlannerEvent, Run } from "../../shared/types";
 import { api, revertConflicts } from "../api";
-import { describeEvent, eventSentences, fieldLabel, type DescribeContext, type EventView, type FieldChange } from "../lib/events";
+import { describeEvent, fieldLabel, type DescribeContext, type FieldChange } from "../lib/events";
 import { followLink, itemHref, openItem } from "../router";
 import { store } from "../store";
 import { reportError, showToast } from "../toast";
@@ -60,28 +60,8 @@ export function EventSentence({
   /** The item the title links to (opens the item panel) */
   open?: ItemRef | undefined;
 }) {
-  return <Sentence view={describeEvent(event, ctx)} event={event} self={self} open={open} />;
-}
-
-/**
- * One event, or a run of events that read as one sentence (the attachments of
- * an email), in words. `event` carries the kind and actor styling.
- */
-export function Sentence({
-  view,
-  event,
-  self = false,
-  open,
-  onRunClick,
-}: {
-  view: EventView;
-  event: PlannerEvent;
-  self?: boolean;
-  open?: ItemRef | undefined;
-  onRunClick?: ((runId: Id) => void) | undefined;
-}) {
+  const view = describeEvent(event, ctx);
   const noun = self ? `this ${event.entity_type}` : view.noun;
-  const run = event.actor_kind === "claude" && onRunClick !== undefined && event.run_id !== null ? event.run_id : null;
   let title: ReactNode = null;
   if (!self && view.title !== null) {
     const quoted = `“${view.title}”`;
@@ -99,62 +79,7 @@ export function Sentence({
       {noun && ` ${noun}`}
       {title && <> {title}</>}
       {view.suffix && ` ${view.suffix}`}
-      {run !== null && onRunClick && (
-        <>
-          {" "}
-          <button type="button" className="link-button" onClick={() => onRunClick(run)}>
-            <span className="run-label">Run:</span> Show this run's changes
-          </button>
-        </>
-      )}
     </span>
-  );
-}
-
-/**
- * A run of events that are shown as one sentence: the events grouped and
- * described, each with its own time, diff and Revert.
- */
-export function EventEntries({
-  events,
-  ctx,
-  extras,
-  onReverted,
-  selfFor,
-  open,
-  onRunClick,
-}: {
-  events: readonly PlannerEvent[];
-  ctx: DescribeContext;
-  extras: EventExtras;
-  onReverted: () => void;
-  /** The event is about the item whose history this is ("this task") */
-  selfFor?: ((event: PlannerEvent) => boolean) | undefined;
-  /** The item the title links to */
-  open?: ((event: PlannerEvent) => ItemRef | undefined) | undefined;
-  onRunClick?: ((runId: Id) => void) | undefined;
-}) {
-  const views = eventSentences(events, ctx);
-  return (
-    <>
-      {views.map((view, index) => {
-        const event = events[index];
-        if (!event) return null;
-        const self = selfFor?.(event) ?? false;
-        return (
-          <EventEntry
-            key={event.id}
-            event={event}
-            view={view}
-            sentence={<Sentence view={view} event={event} self={self} open={open?.(event)} onRunClick={onRunClick} />}
-            self={self}
-            ctx={ctx}
-            extras={extras}
-            onReverted={onReverted}
-          />
-        );
-      })}
-    </>
   );
 }
 
@@ -197,24 +122,25 @@ export interface EventExtras {
  */
 export function EventEntry({
   event,
-  view,
-  sentence,
-  self = false,
   ctx,
   extras,
+  self = false,
+  open,
+  onRunClick,
   onReverted,
 }: {
   event: PlannerEvent;
-  /** The event in words; given when a run of events reads as one sentence */
-  view: EventView;
-  /** The sentence to show, when it is not this event alone */
-  sentence: ReactNode;
-  /** The event is about the item whose history this is */
-  self?: boolean;
   ctx: DescribeContext;
   extras: EventExtras;
+  /** The event is about the item whose history this is */
+  self?: boolean;
+  /** The item the title links to */
+  open?: ItemRef | undefined;
+  /** Feed rows: show the run as a button that calls this */
+  onRunClick?: ((runId: Id) => void) | undefined;
   onReverted: () => void;
 }) {
+  const view = describeEvent(event, ctx);
   const revert = useRevert((confirm) => api.revertEvent(event.id, confirm), onReverted);
   const run = event.run_id ? extras.runs.get(event.run_id) : undefined;
   const sources = (event.source_capture_ids ?? []).flatMap((id) => {
@@ -224,7 +150,7 @@ export function EventEntry({
   return (
     <li className={`event event--${event.actor_kind}`}>
       <div className="event-head">
-        {sentence}
+        <EventSentence event={event} ctx={ctx} self={self} open={open} />
         <span className="event-meta">
           <TimeAgo ts={event.ts} />
           {view.revertible && <RevertButton revert={revert} label="Revert" title="Undo this change" />}
@@ -232,15 +158,28 @@ export function EventEntry({
       </div>
       {event.reverts_event_id !== null && <p className="muted small">Undoes an earlier change.</p>}
       <ChangeList changes={view.changes} />
-      {event.actor_kind === "claude" && run && (
+      {event.actor_kind === "claude" && onRunClick && event.run_id !== null && (
+        <p className="run-tag">
+          <span className="run-label">Run:</span>{" "}
+          <button type="button" className="link-button" onClick={() => event.run_id !== null && onRunClick(event.run_id)}>
+            {run?.intent ?? "Show this run's changes"}
+          </button>
+        </p>
+      )}
+      {event.actor_kind === "claude" && !onRunClick && (
         <div className="run-note">
-          <p>
-            <span className="run-label">Run:</span> {run.intent}
-          </p>
-          {run.summary ? <p className="run-summary">{run.summary}</p> : <p className="small">No summary yet.</p>}
+          {run ? (
+            <>
+              <p>
+                <span className="run-label">Run:</span> {run.intent}
+              </p>
+              {run.summary ? <p className="run-summary">{run.summary}</p> : <p className="small">No summary yet.</p>}
+            </>
+          ) : (
+            <p className="small">Made by Claude in a run.</p>
+          )}
         </div>
       )}
-      {event.actor_kind === "claude" && !run && <p className="small">Made by Claude in a run.</p>}
       {sources.length > 0 && (
         <div className="sources">
           <p className="sources-title">Based on</p>

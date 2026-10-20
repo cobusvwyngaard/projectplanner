@@ -1,9 +1,12 @@
-// Settings › People: the display name and initials of both people.
+// Settings › People: the display name and initials of each person, and the
+// email addresses that reach the planner's Inbox (SPEC 11.2).
 
 import { useId, useMemo, useState, type FormEvent } from "react";
 import type { UpdateUserRequest } from "../../shared/api";
-import type { User } from "../../shared/types";
-import { updateUser } from "../actions";
+import type { User, UserEmail } from "../../shared/types";
+import { archiveUserEmail, createUserEmail, updateUser } from "../actions";
+import { errorMessage } from "../api";
+import { ConfirmButton } from "../components/ui";
 import { usePlanner } from "../store";
 
 const NAME_MAX = 40;
@@ -18,7 +21,7 @@ function problemWith(name: string, initials: string): string | null {
 export function PeopleSection() {
   const users = usePlanner((s) => s.users);
   const me = usePlanner((s) => s.me);
-  // You first, then the other person.
+  // You first, then the other person. The list is by id, so it works for any number of people.
   const people = useMemo(
     () => [...users.values()].sort((a, b) => Number(b.id === me.id) - Number(a.id === me.id) || a.id.localeCompare(b.id)),
     [users, me.id],
@@ -29,10 +32,32 @@ export function PeopleSection() {
       <p className="muted">Names and initials show on cards, in item histories and in the activity.</p>
       <div className="people">
         {people.map((user) => (
-          <PersonForm key={user.id} user={user} isMe={user.id === me.id} />
+          <PersonCard key={user.id} user={user} isMe={user.id === me.id} />
         ))}
       </div>
     </section>
+  );
+}
+
+/** One person's card: their name form and their email addresses. */
+function PersonCard({ user, isMe }: { user: User; isMe: boolean }) {
+  return (
+    <div className="person-card">
+      <PersonForm user={user} isMe={isMe} />
+      <EmailAddresses userId={user.id} />
+    </div>
+  );
+}
+
+/** A person's registered email addresses, oldest first. */
+function useEmailsFor(userId: string): UserEmail[] {
+  // Select the whole map (a stable value) and derive the list here, so the
+  // component re-renders when this person's addresses change, not on every
+  // store change.
+  const emails = usePlanner((s) => s.emails);
+  return useMemo(
+    () => [...emails.values()].filter((e) => e.user_id === userId).sort((a, b) => a.address.localeCompare(b.address)),
+    [emails, userId],
   );
 }
 
@@ -114,6 +139,98 @@ function PersonForm({ user, isMe }: { user: User; isMe: boolean }) {
           </button>
         )}
       </div>
+    </form>
+  );
+}
+
+/** The addresses of one person, each with a Remove, and the field to add one. */
+function EmailAddresses({ userId }: { userId: string }) {
+  const id = useId();
+  const emails = useEmailsFor(userId);
+  return (
+    <div className="person-emails">
+      <h4>Email addresses</h4>
+      <p className="muted small">Email sent from, to or cc'd to these addresses can reach the planner's Inbox.</p>
+      {emails.length === 0 ? (
+        <p className="muted small">No email addresses yet.</p>
+      ) : (
+        <ul className="email-list">
+          {emails.map((email) => (
+            <AddressRow key={email.id} email={email} />
+          ))}
+        </ul>
+      )}
+      <AddEmail userId={userId} idPrefix={id} />
+    </div>
+  );
+}
+
+function AddressRow({ email }: { email: UserEmail }) {
+  return (
+    <li className="email-row">
+      <span className="email-address">{email.address}</span>
+      <ConfirmButton
+        className="button button--small button--quiet"
+        question={`Remove ${email.address}?`}
+        confirmLabel="Remove"
+        onConfirm={() => void archiveUserEmail(email.id)}
+      >
+        Remove
+      </ConfirmButton>
+    </li>
+  );
+}
+
+function AddEmail({ userId, idPrefix }: { userId: string; idPrefix: string }) {
+  const [address, setAddress] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const empty = address.trim() === "";
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (empty || busy) return;
+    setBusy(true);
+    try {
+      await createUserEmail(userId, address.trim());
+      setAddress("");
+      setError(null);
+    } catch (err) {
+      // The message names the person the address already belongs to, so it
+      // stays under the field.
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="add-email" onSubmit={(e) => void submit(e)}>
+      <div className="field">
+        <label className="field-label" htmlFor={`${idPrefix}-address`}>
+          Add an email address
+        </label>
+        <input
+          id={`${idPrefix}-address`}
+          className="input"
+          type="email"
+          value={address}
+          autoComplete="off"
+          placeholder="name@example.com"
+          onChange={(e) => {
+            setAddress(e.target.value);
+            setError(null);
+          }}
+        />
+      </div>
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button type="submit" className="button button--primary" disabled={empty || busy}>
+        {busy ? "Adding…" : "Add"}
+      </button>
     </form>
   );
 }

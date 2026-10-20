@@ -11,7 +11,7 @@ import type {
   UpdateTaskRequest,
   UpdateUserRequest,
 } from "../shared/api";
-import type { Id, ItemRef, Label, Link, NoteView, SettingKey, SettingsMap, TaskView, User } from "../shared/types";
+import type { Id, ItemRef, Label, Link, NoteView, SettingKey, SettingsMap, TaskView, User, UserEmail } from "../shared/types";
 import { api } from "./api";
 import { roundPosition } from "./lib/board";
 import { store } from "./store";
@@ -173,6 +173,26 @@ export function reorderLabels(ids: Id[], optimistic: readonly Label[]): Promise<
 
 export function updateUser(id: Id, patch: UpdateUserRequest): Promise<User | undefined> {
   return attempt(() => store.change("user", id, patch, () => api.updateUser(id, patch)));
+}
+
+/**
+ * Register an email address for a person (SPEC 11.2). It rethrows a failure,
+ * so the caller can show the message under the field it belongs to.
+ */
+export function createUserEmail(userId: Id, address: string): Promise<UserEmail> {
+  return api.createUserEmail(userId, { address }).then((response) => {
+    store.applyMutation("user_email", response);
+    return response.row;
+  });
+}
+
+/** Archive a registered email address, freeing it for reuse (SPEC 11.2). */
+export function archiveUserEmail(id: Id): Promise<UserEmail | undefined> {
+  return attempt(async () => {
+    const response = await api.archiveUserEmail(id);
+    store.applyMutation("user_email", response);
+    return response.row;
+  });
 }
 
 export function updateSetting<K extends SettingKey>(key: K, value: SettingsMap[K]): Promise<SettingsMap | undefined> {

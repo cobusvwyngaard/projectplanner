@@ -4,7 +4,7 @@
 
 import type { BootstrapResponse, ChangesResponse, MutationResponse } from "../../shared/api";
 import { addDays, daysBetween } from "../../shared/dates";
-import type { Capture, Id, Label, Link, LocalDate, NoteView, SettingsMap, TaskView, User } from "../../shared/types";
+import type { Capture, Id, Label, Link, LocalDate, NoteView, SettingsMap, TaskView, User, UserEmail } from "../../shared/types";
 
 export interface RowTypes {
   note: NoteView;
@@ -12,6 +12,7 @@ export interface RowTypes {
   link: Link;
   label: Label;
   user: User;
+  user_email: UserEmail;
 }
 export type RowKind = keyof RowTypes;
 
@@ -25,6 +26,8 @@ export interface PlannerState {
   tasks: ReadonlyMap<Id, TaskView>;
   links: ReadonlyMap<Id, Link>;
   captures: ReadonlyMap<Id, Capture>;
+  /** Registered email addresses that are not archived */
+  emails: ReadonlyMap<Id, UserEmail>;
   settings: SettingsMap;
   /** Newest event seen through bootstrap or the change feed */
   cursor: Id | null;
@@ -55,6 +58,7 @@ export function fromBootstrap(boot: BootstrapResponse): PlannerState {
     tasks: byId(boot.tasks.filter((t) => t.archived_at === null)),
     links: byId(boot.links.filter((l) => l.archived_at === null)),
     captures: new Map(),
+    emails: byId(boot.user_emails.filter((e) => e.archived_at === null)),
     settings: boot.settings,
     cursor: boot.cursor,
     today: boot.today,
@@ -80,9 +84,9 @@ function replaced<T extends { id: Id }>(map: ReadonlyMap<Id, T>, row: T, remove:
 }
 
 /**
- * Put the current version of a row into the state. Archived notes, tasks and
- * links are removed; labels stay (with archived_at set); a change to the
- * signed-in person also updates `me`.
+ * Put the current version of a row into the state. Archived notes, tasks,
+ * links and email addresses are removed; labels stay (with archived_at set);
+ * a change to the signed-in person also updates `me`.
  */
 export function putRow<K extends RowKind>(state: PlannerState, kind: K, row: RowTypes[K]): PlannerState {
   const item = { kind, row } as KindedRow;
@@ -107,6 +111,11 @@ export function putRow<K extends RowKind>(state: PlannerState, kind: K, row: Row
       const users = replaced(state.users, item.row, false);
       if (users === state.users) return state;
       return { ...state, users, me: item.row.id === state.me.id ? item.row : state.me };
+    }
+    case "user_email": {
+      // An archived address is gone: it frees the address for reuse.
+      const emails = replaced(state.emails, item.row, item.row.archived_at !== null);
+      return emails === state.emails ? state : { ...state, emails };
     }
   }
 }
@@ -194,6 +203,7 @@ export function applyChanges(state: PlannerState, changes: ChangesResponse): Pla
     }
   };
   apply("user", changes.users);
+  apply("user_email", changes.user_emails);
   apply("label", changes.labels);
   apply("note", changes.notes);
   apply("task", changes.tasks);

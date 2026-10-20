@@ -13,6 +13,7 @@ import type {
   CreateLinkRequest,
   CreateNoteRequest,
   CreateTaskRequest,
+  CreateUserEmailRequest,
   EventsResponse,
   HistoryResponse,
   MutationResponse,
@@ -42,6 +43,7 @@ import type {
   TaskView,
   Timestamp,
   User,
+  UserEmail,
 } from "../shared/types";
 
 export class ApiError extends Error {
@@ -222,6 +224,10 @@ export const api = {
 
   updateUser: (id: Id, body: UpdateUserRequest) =>
     request<MutationResponse<User>>("PATCH", `/api/users/${seg(id)}`, { body }),
+
+  createUserEmail: (userId: Id, body: CreateUserEmailRequest) =>
+    request<MutationResponse<UserEmail>>("POST", `/api/users/${seg(userId)}/emails`, { body }),
+  archiveUserEmail: (id: Id) => request<MutationResponse<UserEmail>>("POST", `/api/user-emails/${seg(id)}/archive`),
 
   updateSetting: <K extends SettingKey>(key: K, value: SettingsMap[K]) =>
     request<{ settings: SettingsMap }>("PUT", `/api/settings/${seg(key)}`, { body: { value } }),

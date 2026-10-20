@@ -47,8 +47,8 @@ const NOUNS: Record<EntityType, string> = {
   capture: "the capture",
   user: "the person",
   setting: "the setting",
-  user_email: "the email address",
-  attachment: "the attachment",
+  user_email: "an email address",
+  attachment: "an attachment",
   session: "a browser",
   claude_connection: "a Claude connection",
 };
@@ -86,13 +86,13 @@ const HIDDEN_FIELDS = new Set([
   "a_type", "a_id", "b_type", "b_id", "kind", "author_user_id", "email",
   "r2_key", "mime", "duration_s", "transcript_json", "transcript_status", "transcript_error",
   "transcribe_attempts", "transcribe_next_at", "claimed_by_run_id", "claimed_at",
-  "processed_by_run_id", "processed_at", "key",
+  "processed_by_run_id", "processed_at", "key", "user_id",
 ]);
 
 /** Fields shown when an item is created (others are defaults or positions). */
 const CREATE_FIELDS = new Set([
   "title", "body", "detail", "label_id", "assignee_id", "due_date", "name", "colour_hex",
-  "display_name", "initials", "text", "value_json",
+  "display_name", "initials", "text", "value_json", "address", "filename", "capture_id",
 ]);
 
 const REVERTIBLE_ACTIONS: ReadonlySet<EventAction> = new Set([
@@ -100,7 +100,7 @@ const REVERTIBLE_ACTIONS: ReadonlySet<EventAction> = new Set([
 ]);
 
 /** Kinds of record whose creation cannot be undone (they cannot be archived). */
-const UNARCHIVABLE: ReadonlySet<EntityType> = new Set(["capture", "user", "setting", "session"]);
+const UNARCHIVABLE: ReadonlySet<EntityType> = new Set(["capture", "user", "setting", "session", "user_email", "attachment"]);
 
 export function fieldLabel(field: string): string {
   if (field === "x" || field === "y") return FIELD_LABELS.position ?? field;
@@ -306,6 +306,8 @@ function verbFor(event: PlannerEvent): Verb {
   switch (event.action) {
     case "create":
       if (event.entity_type === "link") return { verb: "linked", suffix: "" };
+      if (event.entity_type === "user_email") return { verb: "added", suffix: "" };
+      if (event.entity_type === "attachment") return { verb: "listed", suffix: "" };
       return { verb: event.entity_type === "capture" ? "captured" : "created", suffix: "" };
     case "update":
       return updateVerb(event);
@@ -316,6 +318,7 @@ function verbFor(event: PlannerEvent): Verb {
       return { verb: "disconnected", suffix: typeof name === "string" && name !== "" ? `(${name})` : "" };
     }
     default:
+      if (event.entity_type === "user_email" && event.action === "archive") return { verb: "removed", suffix: "" };
       return { verb: ACTION_VERBS[event.action], suffix: "" };
   }
 }
@@ -323,6 +326,14 @@ function verbFor(event: PlannerEvent): Verb {
 /** The display title of an event's item, if known. */
 export function eventTitle(event: PlannerEvent, titles: Readonly<Record<string, string>>): string | null {
   if (event.entity_type === "setting") return settingName(event.entity_id);
+  if (event.entity_type === "user_email") {
+    const addr = event.after?.address ?? event.before?.address;
+    if (typeof addr === "string" && addr !== "") return addr;
+  }
+  if (event.entity_type === "attachment") {
+    const name = event.after?.filename ?? event.before?.filename;
+    if (typeof name === "string" && name !== "") return name;
+  }
   const title = titles[`${event.entity_type}:${event.entity_id}`];
   if (title === undefined) return null;
   return event.entity_type === "link" ? title.replace(/^Link: /, "") : title;
@@ -331,12 +342,42 @@ export function eventTitle(event: PlannerEvent, titles: Readonly<Record<string, 
 export function describeEvent(event: PlannerEvent, ctx: DescribeContext): EventView {
   const { verb, suffix } = verbFor(event);
   const session = event.entity_type === "session";
+  let noun = session && event.action === "login" ? "" : NOUNS[event.entity_type];
+  let title = session ? null : eventTitle(event, ctx.titles);
+  let finalSuffix = suffix;
+  if (event.entity_type === "user_email") {
+    const userId = (event.after as any)?.user_id ?? (event.before as any)?.user_id;
+    const person = userId ? userName(userId, ctx.users) : null;
+    if (person) {
+      if (verb === "added") {
+        noun = `an email address for ${person}`;
+        if (title) {
+          finalSuffix = `(${title})`;
+          title = null;
+        }
+      } else if (verb === "removed") {
+        noun = `an email address for ${person}`;
+        if (title) {
+          finalSuffix = `(${title})`;
+          title = null;
+        }
+      }
+    }
+  }
+  if (event.entity_type === "attachment" && verb === "listed") {
+    finalSuffix = title ? `on an email` : suffix;
+    // stage says: "<actor> listed an attachment (file name) on an email" - need to match exactly
+    if (title) {
+      finalSuffix = `(${title}) on an email`;
+      title = null;
+    }
+  }
   return {
     actor: actorLabel(eventActor(event), ctx.users),
     verb,
-    noun: session && event.action === "login" ? "" : NOUNS[event.entity_type],
-    title: session ? null : eventTitle(event, ctx.titles),
-    suffix,
+    noun: session && event.action === "login" ? "" : noun,
+    title,
+    suffix: finalSuffix,
     changes: eventChanges(event, ctx),
     revertible: isRevertible(event),
   };

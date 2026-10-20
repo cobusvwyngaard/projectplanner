@@ -4,7 +4,7 @@
 
 import type { BootstrapResponse, ChangesResponse, MutationResponse } from "../../shared/api";
 import { addDays, daysBetween } from "../../shared/dates";
-import type { Capture, Id, Label, Link, LocalDate, NoteView, SettingsMap, TaskView, User } from "../../shared/types";
+import type { Capture, Id, Label, Link, LocalDate, NoteView, SettingsMap, TaskView, User, UserEmail } from "../../shared/types";
 
 export interface RowTypes {
   note: NoteView;
@@ -12,12 +12,14 @@ export interface RowTypes {
   link: Link;
   label: Label;
   user: User;
+  user_email: UserEmail;
 }
 export type RowKind = keyof RowTypes;
 
 export interface PlannerState {
   me: User;
   users: ReadonlyMap<Id, User>;
+  userEmails: ReadonlyMap<Id, UserEmail>;
   /** Every label, archived ones included, so items keep their colour */
   labels: ReadonlyMap<Id, Label>;
   /** Notes, tasks and links that are not archived */
@@ -50,6 +52,7 @@ export function fromBootstrap(boot: BootstrapResponse): PlannerState {
   return {
     me: boot.me,
     users: byId(boot.users),
+    userEmails: byId(boot.user_emails),
     labels: byId(boot.labels),
     notes: byId(boot.notes.filter((n) => n.archived_at === null)),
     tasks: byId(boot.tasks.filter((t) => t.archived_at === null)),
@@ -107,6 +110,10 @@ export function putRow<K extends RowKind>(state: PlannerState, kind: K, row: Row
       const users = replaced(state.users, item.row, false);
       if (users === state.users) return state;
       return { ...state, users, me: item.row.id === state.me.id ? item.row : state.me };
+    }
+    case "user_email": {
+      const userEmails = replaced(state.userEmails, item.row, item.row.archived_at !== null);
+      return userEmails === state.userEmails ? state : { ...state, userEmails };
     }
   }
 }
@@ -194,6 +201,7 @@ export function applyChanges(state: PlannerState, changes: ChangesResponse): Pla
     }
   };
   apply("user", changes.users);
+  if (changes.user_emails) apply("user_email", changes.user_emails);
   apply("label", changes.labels);
   apply("note", changes.notes);
   apply("task", changes.tasks);

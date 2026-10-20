@@ -5,6 +5,9 @@ import type { UpdateUserRequest } from "../../shared/api";
 import type { User } from "../../shared/types";
 import { updateUser } from "../actions";
 import { usePlanner } from "../store";
+import { api, errorMessage } from "../api";
+import { ConfirmButton } from "../components/ui";
+import { reportError } from "../toast";
 
 const NAME_MAX = 40;
 const INITIALS = /^[\p{L}\p{N}]{1,3}$/u;
@@ -18,7 +21,6 @@ function problemWith(name: string, initials: string): string | null {
 export function PeopleSection() {
   const users = usePlanner((s) => s.users);
   const me = usePlanner((s) => s.me);
-  // You first, then the other person.
   const people = useMemo(
     () => [...users.values()].sort((a, b) => Number(b.id === me.id) - Number(a.id === me.id) || a.id.localeCompare(b.id)),
     [users, me.id],
@@ -38,7 +40,6 @@ export function PeopleSection() {
 
 function PersonForm({ user, isMe }: { user: User; isMe: boolean }) {
   const id = useId();
-  // null while not editing, so a change from the other browser shows straight away.
   const [draft, setDraft] = useState<{ name: string; initials: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const name = draft?.name ?? user.display_name;
@@ -55,8 +56,48 @@ function PersonForm({ user, isMe }: { user: User; isMe: boolean }) {
     setBusy(true);
     const saved = await updateUser(user.id, patch);
     setBusy(false);
-    // On failure the typed name and initials stay.
     if (saved) setDraft(null);
+  };
+
+  const userEmails = useMemo(() => {
+    const out: import("../../shared/types").UserEmail[] = [];
+    // need to get from store via hook - use separate call
+    return out;
+  }, []);
+
+  const storeUserEmails = usePlanner((s) => {
+    const out: import("../../shared/types").UserEmail[] = [];
+    for (const ue of s.userEmails.values()) {
+      if (ue.user_id === user.id && ue.archived_at === null) out.push(ue);
+    }
+    return out.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  });
+
+  const [email, setEmail] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const addEmail = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || adding) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      await api.createUserEmail(user.id, { address: email.trim().toLowerCase() });
+      setEmail("");
+    } catch (err) {
+      setAddError(errorMessage(err));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const removeEmail = async (emailId: string) => {
+    try {
+      await api.archiveUserEmail(emailId);
+    } catch (err) {
+      reportError(err);
+    }
   };
 
   return (
@@ -113,6 +154,46 @@ function PersonForm({ user, isMe }: { user: User; isMe: boolean }) {
             Cancel
           </button>
         )}
+      </div>
+
+      <div className="person-emails">
+        {storeUserEmails.map((ue) => (
+          <div key={ue.id} className="person-email-row">
+            <span className="person-email">{ue.address}</span>
+            <ConfirmButton
+              question="Remove this email address?"
+              confirmLabel="Remove"
+              onConfirm={() => void removeEmail(ue.id)}
+              className="button button--small button--quiet"
+            >
+              Remove
+            </ConfirmButton>
+          </div>
+        ))}
+        <form className="person-email-add" onSubmit={(e) => void addEmail(e)}>
+          <label className="field-label" htmlFor={`${id}-email`}>
+            Add an email address
+          </label>
+          <div className="person-email-add-row">
+            <input
+              id={`${id}-email`}
+              className="input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
+              inputMode="email"
+            />
+            <button type="submit" className="button button--small" disabled={!email.trim() || adding}>
+              {adding ? "Adding…" : "Add"}
+            </button>
+          </div>
+          {addError && (
+            <p className="field-error" role="alert">
+              {addError}
+            </p>
+          )}
+        </form>
+        <p className="muted small">Email sent from, to or cc'd to these addresses can reach the planner's Inbox.</p>
       </div>
     </form>
   );

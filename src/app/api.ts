@@ -222,6 +222,10 @@ export const api = {
 
   updateUser: (id: Id, body: UpdateUserRequest) =>
     request<MutationResponse<User>>("PATCH", `/api/users/${seg(id)}`, { body }),
+  createUserEmail: (id: Id, body: { address: string }) =>
+    request<MutationResponse<import("../../shared/types").UserEmail>>("POST", `/api/users/${seg(id)}/emails`, { body }),
+  archiveUserEmail: (id: Id) =>
+    request<MutationResponse<import("../../shared/types").UserEmail>>("POST", `/api/user-emails/${seg(id)}/archive`),
 
   updateSetting: <K extends SettingKey>(key: K, value: SettingsMap[K]) =>
     request<{ settings: SettingsMap }>("PUT", `/api/settings/${seg(key)}`, { body: { value } }),

@@ -1,0 +1,7 @@
+const fs = require('fs');
+const p = 'test/unit/app-events.test.ts';
+let s = fs.readFileSync(p,'utf8');
+const add = '\n  it(\'describes adding an email address\', () => {\n    const actor = human(USER_1);\n    const event = { id: 200, seq: 200, created_at: \'2025-01-01T00:00:00Z\', actor, entity_type: \'user_email\', entity_id: 1, action: \'create\', after: { user_id: USER_2, address: \'test@example.com\' } };\n    const v = describeEvent(event, ctx);\n    expect(v.noun).toContain(\'test@example.com\');\n  });\n\n  it(\'describes removing an email address\', () => {\n    const actor = human(USER_1);\n    const event = { id: 201, seq: 201, created_at: \'2025-01-01T00:00:00Z\', actor, entity_type: \'user_email\', entity_id: 1, action: \'archive\', before: { user_id: USER_2, address: \'test@example.com\' } };\n    const v = describeEvent(event, ctx);\n    expect(v.noun).toContain(\'test@example.com\');\n  });\n\n  it(\'describes listing an attachment on an email\', () => {\n    const actor = system();\n    const event = { id: 202, seq: 202, created_at: \'2025-01-01T00:00:00Z\', actor, entity_type: \'attachment\', entity_id: 1, action: \'create\', after: { filename: \'invoice.pdf\', capture_id: 10 } };\n    const v = describeEvent(event, ctx);\n    expect(v.suffix).toContain(\'on an email\');\n    expect(v.title).toContain(\'invoice.pdf\');\n  });\n';
+s = s.replace(/\n\}\);\s*$/, add + '});\n');
+fs.writeFileSync(p,s);
+console.log('ok');

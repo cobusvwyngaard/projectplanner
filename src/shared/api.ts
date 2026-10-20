@@ -322,7 +322,8 @@ export interface CaptureDetailResponse {
  * PATCH /api/captures/:id -> MutationResponse<Capture>
  * A transcript edit is a person's event on the capture (SPEC 6.2). People may
  * move a capture between new, ignored and processed, but not while a Claude
- * run has it claimed (409).
+ * run has it claimed (409). The text of an email capture cannot be edited
+ * (400); its inbox status and processing note can still change.
  */
 export interface UpdateCaptureRequest {
   text?: string;
@@ -330,5 +331,5 @@ export interface UpdateCaptureRequest {
   processing_note?: string | null;
 }
 
-// POST /api/captures/:id/retry -> 202 { capture: Capture }   (voice/file captures that are pending or failed)
+// POST /api/captures/:id/retry -> 202 { capture: Capture }   (voice, file and email captures that are pending or failed)
 // GET|HEAD /api/captures/:id/audio -> the audio, with Range support (206/416)

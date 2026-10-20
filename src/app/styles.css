@@ -767,6 +767,16 @@ textarea {
   padding: 0 7px;
 }
 
+/* An email whose sender failed SPF/DKIM/DMARC (SPEC 11.2). */
+.badge--warning {
+  display: inline-block;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: 0.75rem;
+  padding: 0 7px;
+  border-radius: 5px;
+}
+
 .provenance {
   font-size: 0.75rem;
   color: var(--muted);
@@ -2221,6 +2231,27 @@ fieldset:disabled .chip-option {
 .capture-run { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
 .capture-detail { background: var(--surface-2); border-radius: var(--radius); padding: 8px; }
 .capture-detail ul { margin: 0; padding-left: 16px; }
+/* Email captures in the Inbox (SPEC 11): subject, sender, people, body and files. */
+.email-subject { margin: 0; font-size: 1.05rem; font-weight: 650; }
+.email-sender { margin: 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.email-participants { display: flex; flex-direction: column; gap: 4px; }
+.email-participants-row { margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.email-participants-label { color: var(--muted); font-size: 0.85rem; min-width: 26px; }
+.email-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.email-body { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.email-body-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.email-attachments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .record-button {
   display: inline-flex;
   align-items: center;

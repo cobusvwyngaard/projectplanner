@@ -12,10 +12,10 @@ import { actorOf, mutationResponse, queryParams } from "./request";
 import { captureKey } from "../captures/storage";
 import { transcribeCapture } from "../captures/transcribe";
 import { reset as resetLease } from "../captures/lease";
-import { rowsByIds, selectEvents } from "../board/queries";
+import { attachmentsForCapture, rowsByIds, selectEvents } from "../board/queries";
 import { titlesFor } from "../board/titles";
 import { ulid } from "../lib/ulid";
-import type { Capture } from "../../shared/types";
+import type { Capture, CaptureAttachment } from "../../shared/types";
 import type { CaptureDetailResponse, CapturesResponse } from "../../shared/api";
 import type { PlannerEvent } from "../../shared/types";
 import { EVENT_COLUMNS } from "../mutate/events";
@@ -40,6 +40,10 @@ function captureColumns(): string {
 }
 
 const CAPTURE_COLS = captureColumns();
+
+const ATTACHMENT_COLS = ENTITIES.attachment.columns
+  .filter((c) => !ENTITIES.attachment.hidden.includes(c))
+  .join(", ");
 
 async function loadCapture(db: D1Database, id: string): Promise<Capture | null> {
   return db.prepare(`SELECT ${CAPTURE_COLS} FROM captures WHERE id = ?`).bind(id).first<Capture>();
@@ -230,9 +234,12 @@ export const capturesRouter = new Hono<AppBindings>()
       db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE entity_type = 'capture' AND entity_id = ? ORDER BY seq`).bind(id),
     );
 
+    const attachments = capture.kind === "email" ? await attachmentsForCapture(db, id) : [];
+
     const body: CaptureDetailResponse = {
       capture,
       runs,
+      attachments,
       items,
       events: ownEvents,
     };
@@ -286,7 +293,47 @@ export const capturesRouter = new Hono<AppBindings>()
   })
   .on("HEAD", "/:id/audio", async (c) => {
     return streamAudio(c, true);
+  })
+  .get("/:id/attachments/:attachmentId", async (c) => {
+    return downloadAttachment(c);
   });
+
+/**
+ * One attachment of an email capture, after the session check (SPEC 11.3). The
+ * row is looked up by id and capture id together, so an attachment cannot be
+ * fetched through someone else's capture.
+ */
+async function downloadAttachment(c: Context<AppBindings>): Promise<Response> {
+  const attachment = await c.env.DB
+    .prepare(`SELECT ${ATTACHMENT_COLS} FROM capture_attachments WHERE id = ? AND capture_id = ?`)
+    .bind(c.req.param("attachmentId"), c.req.param("id"))
+    .first<CaptureAttachment>();
+  if (!attachment) throw new NotFoundError("No attachment with that id.");
+  if (attachment.too_large === 1 || !attachment.r2_key) {
+    throw new ConflictError("This attachment was too large to keep.");
+  }
+  const object = await c.env.AUDIO.get(attachment.r2_key);
+  if (!object) throw new NotFoundError("No attachment with that id.");
+  const headers = new Headers();
+  headers.set("Content-Type", attachment.mime);
+  headers.set("Content-Length", String(object.size));
+  headers.set("Content-Disposition", attachmentDisposition(attachment.filename));
+  // A download is data, not a page: never cache it, and sandbox it so a file
+  // that a browser renders (an HTML or SVG attachment) cannot act as this site.
+  headers.set("Content-Security-Policy", "sandbox");
+  headers.set("Cache-Control", "no-store");
+  return new Response(object.body, { status: 200, headers });
+}
+
+/** A Content-Disposition that cannot break the header, even for an odd file name. */
+function attachmentDisposition(filename: string): string {
+  const fallback = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  const encoded = encodeURIComponent(filename).replace(
+    /[!'()*]/g,
+    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
 
 async function streamAudio(c: Context<AppBindings>, headOnly: boolean): Promise<Response> {
   const db = c.env.DB;

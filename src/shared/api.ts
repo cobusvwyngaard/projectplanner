@@ -6,6 +6,7 @@
 
 import type {
   Capture,
+  CaptureAttachment,
   EventAction,
   Id,
   ItemRef,
@@ -21,6 +22,7 @@ import type {
   TaskView,
   Timestamp,
   User,
+  UserEmail,
 } from "./types";
 
 export interface ApiErrorBody {
@@ -43,6 +45,8 @@ export interface MutationResponse<T> {
 export interface BootstrapResponse {
   me: User;
   users: User[];
+  /** Every registered email address, archived ones included (SPEC 11.2) */
+  user_emails: UserEmail[];
   /** All labels, archived ones included (archived_at set) so old items still render */
   labels: Label[];
   /** Notes that are not archived */
@@ -72,6 +76,10 @@ export interface ChangesResponse {
   links: Link[];
   labels: Label[];
   users: User[];
+  /** Registered email addresses, archived ones included */
+  user_emails: UserEmail[];
+  /** Attachments of the captures the events touched */
+  attachments: CaptureAttachment[];
   /** Present when any setting changed */
   settings: SettingsMap | null;
   captures: Capture[];
@@ -149,6 +157,13 @@ export interface UpdateUserRequest {
   display_name?: string;
   initials?: string;
 }
+
+/** POST /api/users/:id/emails -> 201 MutationResponse<UserEmail> (SPEC 11.2) */
+export interface CreateUserEmailRequest {
+  /** Trimmed and lower-cased before it is stored */
+  address: string;
+}
+// POST /api/user-emails/:id/archive -> MutationResponse<UserEmail>
 
 /** PUT /api/settings/:key -> { settings: SettingsMap } */
 export interface UpdateSettingRequest<K extends SettingKey = SettingKey> {
@@ -295,6 +310,8 @@ export interface CaptureDetailResponse {
   capture: Capture;
   /** The runs that claimed or processed it */
   runs: Run[];
+  /** Attachments of an email capture, listed even when too large to store */
+  attachments: CaptureAttachment[];
   /** Items those runs created or changed, from their events */
   items: CaptureItemRef[];
   /** The capture's own events, oldest first */

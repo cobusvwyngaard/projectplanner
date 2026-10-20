@@ -47,6 +47,8 @@ const NOUNS: Record<EntityType, string> = {
   capture: "the capture",
   user: "the person",
   setting: "the setting",
+  user_email: "the email address",
+  attachment: "the attachment",
   session: "a browser",
   claude_connection: "a Claude connection",
 };

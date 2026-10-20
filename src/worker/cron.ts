@@ -2,6 +2,7 @@
 
 import { purgeExpired } from "./oauth/kv";
 import { transcribeCapture } from "./captures/transcribe";
+import { readEmail } from "./email/read";
 import { closeExpiredRuns } from "./mcp/runs";
 import type { AppEnv } from "./env";
 
@@ -19,7 +20,7 @@ async function retryTranscriptions(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLAB
   const nowIso = now.toISOString();
   const { results } = await env.DB
     .prepare(
-      `SELECT id FROM captures
+      `SELECT id, kind FROM captures
        WHERE transcript_status IN ('pending','failed')
          AND transcribe_attempts < 5
          AND (transcribe_next_at IS NULL OR transcribe_next_at <= ?)
@@ -27,10 +28,11 @@ async function retryTranscriptions(env: Pick<AppEnv, "DB" | "AUDIO" | "ELEVENLAB
        LIMIT 5`,
     )
     .bind(nowIso)
-    .all<{ id: string }>();
+    .all<{ id: string; kind: string }>();
   for (const r of results) {
     try {
-      await transcribeCapture(env, r.id, now);
+      if (r.kind === "email") await readEmail(env, r.id, now);
+      else await transcribeCapture(env, r.id, now);
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       console.error(`retryTranscriptions ${r.id} failed: ${e.name}: ${e.message}`);

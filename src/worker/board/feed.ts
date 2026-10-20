@@ -11,6 +11,7 @@ import { noteViews, taskViews } from "./provenance";
 import {
   activeLinks,
   listLabels,
+  listUserEmails,
   listUsers,
   newestEvent,
   openNotes,
@@ -27,8 +28,9 @@ export async function loadBootstrap(db: D1Database, me: User, now: Date = new Da
   // Read the cursor first: anything committed while the rows are read is
   // newer than the cursor, so the change feed delivers it again.
   const newest = await newestEvent(db);
-  const [users, labels, notes, tasks, links, settings] = await Promise.all([
+  const [users, userEmails, labels, notes, tasks, links, settings] = await Promise.all([
     listUsers(db),
+    listUserEmails(db),
     listLabels(db),
     openNotes(db),
     openTasks(db),
@@ -39,6 +41,7 @@ export async function loadBootstrap(db: D1Database, me: User, now: Date = new Da
   return {
     me: users.find((u) => u.id === me.id) ?? me,
     users,
+    user_emails: userEmails,
     labels,
     notes: noteRows,
     tasks: taskRows,
@@ -57,6 +60,8 @@ function emptyChanges(cursor: Id | null, reset: boolean): ChangesResponse {
     links: [],
     labels: [],
     users: [],
+    user_emails: [],
+    attachments: [],
     settings: null,
     captures: [],
     cursor,
@@ -86,13 +91,15 @@ export async function loadChanges(db: D1Database, since: Id | undefined): Promis
   if (events.length === 0) return emptyChanges(since, false);
 
   const touched = (type: EntityType) => idsOf(events, type);
-  const [notes, tasks, links, labels, users, captures, settings] = await Promise.all([
+  const [notes, tasks, links, labels, users, userEmails, captures, attachments, settings] = await Promise.all([
     rowsByIds(db, "note", touched("note")).then((rows) => noteViews(db, rows)),
     rowsByIds(db, "task", touched("task")).then((rows) => taskViews(db, rows)),
     rowsByIds(db, "link", touched("link")),
     rowsByIds(db, "label", touched("label")),
     rowsByIds(db, "user", touched("user")),
+    rowsByIds(db, "user_email", touched("user_email")),
     rowsByIds(db, "capture", touched("capture")),
+    rowsByIds(db, "attachment", touched("attachment")),
     touched("setting").length > 0 ? readSettings(db) : Promise.resolve(null),
   ]);
   return {
@@ -102,6 +109,8 @@ export async function loadChanges(db: D1Database, since: Id | undefined): Promis
     links,
     labels,
     users,
+    user_emails: userEmails,
+    attachments,
     settings,
     captures,
     cursor: events[events.length - 1]?.id ?? since,

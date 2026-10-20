@@ -84,8 +84,14 @@ export function EventSentence({
 }
 
 function CaptureView({ capture, ctx }: { capture: Capture; ctx: DescribeContext }) {
-  const kind = capture.kind === "voice" ? "Voice note" : capture.kind === "file" ? "Audio file" : "Typed note";
-  const author = "get" in ctx.users ? ctx.users.get(capture.author_user_id)?.display_name : undefined;
+  const kind =
+    capture.kind === "voice" ? "Voice note" : capture.kind === "file" ? "Audio file" : capture.kind === "email" ? "Email" : "Typed note";
+  const author =
+    capture.author_user_id === null
+      ? "Email"
+      : "get" in ctx.users
+        ? ctx.users.get(capture.author_user_id)?.display_name
+        : undefined;
   return (
     <figure className="capture">
       <figcaption>

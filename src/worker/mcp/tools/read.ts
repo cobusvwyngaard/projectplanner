@@ -86,7 +86,11 @@ export function inboxItem(capture: Capture, users: readonly User[]): InboxItem {
   return {
     id: capture.id,
     kind: capture.kind,
-    author: { id: capture.author_user_id, display_name: author?.display_name ?? capture.author_user_id },
+    // An email capture from an unverified sender has no author (SPEC 11.2).
+    author: {
+      id: capture.author_user_id ?? "email",
+      display_name: author?.display_name ?? "Email",
+    },
     created_at: capture.created_at,
     duration_s: capture.duration_s,
     text: raw === null ? null : truncated ? raw.slice(0, INBOX_TEXT_LIMIT) : raw,

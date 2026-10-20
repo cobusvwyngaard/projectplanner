@@ -234,7 +234,7 @@ function checkActor(actor: Actor): void {
 function authorise(actor: Actor, m: Mutation, spec: EntitySpec): void {
   if (actor.kind === "claude") {
     if (!CLAUDE_ENTITIES.includes(m.entity)) {
-      throw new ForbiddenError("Claude cannot change labels, settings or users.");
+      throw new ForbiddenError("Claude cannot change labels, settings, users or email addresses.");
     }
     if (m.action === "archive" || m.action === "unarchive") {
       throw new ForbiddenError("Only people can archive or unarchive items.");
@@ -247,7 +247,7 @@ function authorise(actor: Actor, m: Mutation, spec: EntitySpec): void {
     throw new ForbiddenError(`This actor cannot create ${m.entity} records.`);
   }
   if ((m.action === "archive" || m.action === "unarchive") && spec.archive === null) {
-    throw new ValidationError(`A ${m.entity} cannot be archived.`);
+    throw new ValidationError(`This ${m.entity} cannot be archived.`);
   }
   if ((m.action === "link" || m.action === "unlink") && actor.kind === "system") {
     throw new ForbiddenError("The system does not link items.");
@@ -295,6 +295,7 @@ async function prepareCreate(
   spec: EntitySpec,
 ): Promise<Prepared> {
   checkValues(m.values, [...spec.writable[ctx.actor.kind], ...spec.createOnly], m.entity);
+  spec.checkCreate?.(ctx.actor, m.values);
   const id = spec.key === "id" ? (m.id ?? ulid(ctx.now.getTime())) : String(m.values[spec.key] ?? "");
   if (!id) throw new ValidationError(`A ${m.entity} needs a ${spec.key}.`);
   if (await ctx.read(m.entity, id)) throw new ConflictError(`That ${m.entity} already exists.`);

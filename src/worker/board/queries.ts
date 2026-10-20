@@ -3,7 +3,19 @@
 //
 // Writes never happen here: they go through src/worker/mutate.
 
-import type { Capture, Id, Label, Link, Note, PlannerEvent, Run, Task, User } from "../../shared/types";
+import type {
+  Capture,
+  CaptureAttachment,
+  Id,
+  Label,
+  Link,
+  Note,
+  PlannerEvent,
+  Run,
+  Task,
+  User,
+  UserEmail,
+} from "../../shared/types";
 import { ENTITIES } from "../mutate/entities";
 import { EVENT_COLUMNS, parseEventRow, type EventRow } from "../mutate/events";
 
@@ -18,6 +30,8 @@ export interface RowTypes {
   label: Label;
   user: User;
   capture: Capture;
+  user_email: UserEmail;
+  attachment: CaptureAttachment;
   run: Run;
 }
 
@@ -34,6 +48,8 @@ const TABLES: Readonly<Record<RowKind, { table: string; columns: string; order: 
   label: { table: "labels", columns: visibleColumns("label"), order: "sort_order, created_at, id" },
   user: { table: "users", columns: visibleColumns("user"), order: "id" },
   capture: { table: "captures", columns: visibleColumns("capture"), order: "id" },
+  user_email: { table: "user_emails", columns: visibleColumns("user_email"), order: "created_at, id" },
+  attachment: { table: "capture_attachments", columns: visibleColumns("attachment"), order: "id" },
   run: { table: "runs", columns: "id, user_id, intent, summary, started_at, finished_at", order: "started_at, id" },
 };
 
@@ -98,6 +114,11 @@ export function listUsers(db: D1Database): Promise<User[]> {
   return list(db, "user", "");
 }
 
+/** Every registered address, archived ones included, oldest first. */
+export function listUserEmails(db: D1Database): Promise<UserEmail[]> {
+  return list(db, "user_email", "");
+}
+
 /** Every label, archived ones included, in the order people arranged them. */
 export function listLabels(db: D1Database): Promise<Label[]> {
   return list(db, "label", "");
@@ -121,6 +142,16 @@ export function openTasks(db: D1Database): Promise<Task[]> {
 /** Links that are not archived. */
 export function activeLinks(db: D1Database): Promise<Link[]> {
   return list(db, "link", "WHERE archived_at IS NULL");
+}
+
+/** Attachments of one capture, in the order they were stored. */
+export function attachmentsForCapture(db: D1Database, captureId: Id): Promise<CaptureAttachment[]> {
+  const t = TABLES.attachment;
+  return db
+    .prepare(`SELECT ${t.columns} FROM ${t.table} WHERE capture_id = ? ORDER BY created_at, id`)
+    .bind(captureId)
+    .all<CaptureAttachment>()
+    .then((r) => r.results);
 }
 
 /** Id and seq of the newest event, or null when nothing has happened yet. */

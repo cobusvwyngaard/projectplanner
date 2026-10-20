@@ -76,15 +76,48 @@ export interface Link {
   archived_at: Timestamp | null;
 }
 
-export type CaptureKind = "voice" | "text" | "file";
+export type CaptureKind = "voice" | "text" | "file" | "email";
 export type TranscriptStatus = "n/a" | "pending" | "done" | "failed";
 export type InboxStatus = "new" | "claimed" | "processed" | "ignored";
+
+/** One person in an email: how the message named them and the planner user they map to. */
+export interface EmailParticipant {
+  address: string;
+  name: string;
+  role: "from" | "to" | "cc";
+  /** The planner user this address belongs to, or null when it maps to nobody */
+  user_id: Id | null;
+}
+
+/** A registered email address of a person (SPEC 11.2). */
+export interface UserEmail {
+  id: Id;
+  user_id: Id;
+  /** Lower-case; one open row per address */
+  address: string;
+  created_at: Timestamp;
+  archived_at: Timestamp | null;
+}
+
+/** One attachment of an email capture, listed even when it was not stored. */
+export interface CaptureAttachment {
+  id: Id;
+  capture_id: Id;
+  filename: string;
+  mime: string;
+  size_bytes: number;
+  /** R2 key of the stored content, or null when too_large is 1 */
+  r2_key: string | null;
+  too_large: 0 | 1;
+  created_at: Timestamp;
+}
 
 /** A capture as the app sees it. transcript_json is never sent to the browser. */
 export interface Capture {
   id: Id;
   kind: CaptureKind;
-  author_user_id: Id;
+  /** Null only for an email capture whose sender was not verified (SPEC 11.2) */
+  author_user_id: Id | null;
   r2_key: string | null;
   mime: string | null;
   duration_s: number | null;
@@ -100,6 +133,16 @@ export interface Capture {
   processed_at: Timestamp | null;
   processing_note: string | null;
   created_at: Timestamp;
+  email_subject: string | null;
+  email_from: string | null;
+  /** JSON array of addresses, as sent */
+  email_to_json: string | null;
+  email_cc_json: string | null;
+  /** JSON array of EmailParticipant */
+  email_participants_json: string | null;
+  email_message_id: string | null;
+  /** 1 when the sender was verified (SPEC 11.2), 0 when not, null for other kinds */
+  email_sender_verified: 0 | 1 | null;
 }
 
 export interface Run {
@@ -121,6 +164,8 @@ export type EntityType =
   | "capture"
   | "user"
   | "setting"
+  | "user_email"
+  | "attachment"
   | "session"
   | "claude_connection";
 

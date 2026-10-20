@@ -10,11 +10,17 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const SOURCE = join(ROOT, "src");
 
 /** Tables that only mutate (and the event helper) may write. */
-const PROTECTED = ["notes", "tasks", "links", "labels", "users", "settings", "events", "captures"];
+const PROTECTED = [
+  "notes", "tasks", "links", "labels", "users", "settings", "events", "captures",
+  "user_emails", "capture_attachments",
+];
 
 /** Files allowed to write a protected table, and which tables. */
 const ALLOWED: Record<string, string[]> = {
-  "src/worker/mutate/index.ts": ["notes", "tasks", "links", "labels", "users", "settings", "captures"],
+  "src/worker/mutate/index.ts": [
+    "notes", "tasks", "links", "labels", "users", "settings", "captures",
+    "user_emails", "capture_attachments",
+  ],
   "src/worker/mutate/events.ts": ["events"],
 };
 

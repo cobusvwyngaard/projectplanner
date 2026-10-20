@@ -3,6 +3,7 @@
 // (oauth/provider.ts); the cron runs cron.ts.
 
 import { runScheduled } from "./cron";
+import { receiveEmail } from "./email/receive";
 import type { AppEnv } from "./env";
 import { isLoopbackHostname } from "./lib/http";
 import { PlannerMcp } from "./mcp/agent";
@@ -32,5 +33,8 @@ export default {
   },
   scheduled(_controller, env, ctx) {
     ctx.waitUntil(runScheduled(env));
+  },
+  email(message, env, ctx) {
+    return receiveEmail(message, env, ctx);
   },
 } satisfies ExportedHandler<Env>;

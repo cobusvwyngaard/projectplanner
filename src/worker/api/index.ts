@@ -11,7 +11,7 @@ import { notesRouter } from "./notes";
 import { runsRouter } from "./runs";
 import { settingsRouter } from "./settings";
 import { tasksRouter } from "./tasks";
-import { usersRouter } from "./users";
+import { userEmailsRouter, usersRouter } from "./users";
 
 /**
  * Board API, mounted at /api behind the session check (src/worker/app.ts).
@@ -29,6 +29,7 @@ apiRouter.route("/tasks", tasksRouter);
 apiRouter.route("/links", linksRouter);
 apiRouter.route("/labels", labelsRouter);
 apiRouter.route("/users", usersRouter);
+apiRouter.route("/user-emails", userEmailsRouter);
 apiRouter.route("/settings", settingsRouter);
 apiRouter.route("/events", eventsRouter);
 apiRouter.route("/history", historyRouter);

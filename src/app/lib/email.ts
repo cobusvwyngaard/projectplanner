@@ -4,13 +4,13 @@
 
 import type { EmailParticipant, Id, User } from "../../shared/types";
 
-/** "report.pdf · PDF · 1.2 MB": a byte count in B, KB or MB with one decimal. */
+/** "notes.txt · TXT · 14 B" or "report.pdf · PDF · 1.2 MB": whole bytes, and one decimal from a kilobyte up. */
 export function formatSize(bytes: number): string {
   const kilobyte = 1024;
   const megabyte = kilobyte * 1024;
   if (bytes >= megabyte) return `${(bytes / megabyte).toFixed(1)} MB`;
   if (bytes >= kilobyte) return `${(bytes / kilobyte).toFixed(1)} KB`;
-  return `${bytes.toFixed(1)} B`;
+  return `${bytes} B`;
 }
 
 /** "PDF" from the file name, or the content type when the name has no extension. */

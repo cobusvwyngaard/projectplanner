@@ -2252,6 +2252,9 @@ fieldset:disabled .chip-option {
 .email-body { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .email-body-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .email-attachments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+/* The attachment link is text like the other links in the app, not the browser's default blue. */
+.email-attachments a { color: var(--accent); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.email-attachments a:hover { text-decoration: underline; }
 .record-button {
   display: inline-flex;
   align-items: center;

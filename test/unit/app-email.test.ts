@@ -16,10 +16,10 @@ import type { EmailParticipant } from "../../src/shared/types";
 import { ME, OTHER } from "./app-fixtures";
 
 describe("formatSize", () => {
-  it("counts bytes below a kilobyte", () => {
-    expect(formatSize(0)).toBe("0.0 B");
-    expect(formatSize(1)).toBe("1.0 B");
-    expect(formatSize(1023)).toBe("1023.0 B");
+  it("counts bytes below a kilobyte, with no decimal", () => {
+    expect(formatSize(0)).toBe("0 B");
+    expect(formatSize(1)).toBe("1 B");
+    expect(formatSize(1023)).toBe("1023 B");
   });
 
   it("counts kilobytes up to a megabyte, with one decimal", () => {

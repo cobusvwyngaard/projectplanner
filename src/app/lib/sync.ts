@@ -220,6 +220,7 @@ export class PlannerStore {
       link: state.links,
       label: state.labels,
       user: state.users,
+      user_email: state.emails,
     };
     return maps[kind].get(id);
   }

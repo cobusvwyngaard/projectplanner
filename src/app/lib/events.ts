@@ -329,6 +329,7 @@ export function eventTitle(event: PlannerEvent, titles: Readonly<Record<string, 
 }
 
 export function describeEvent(event: PlannerEvent, ctx: DescribeContext): EventView {
+  if (event.entity_type === "user_email") return describeUserEmail(event, ctx);
   const { verb, suffix } = verbFor(event);
   const session = event.entity_type === "session";
   return {
@@ -340,4 +341,73 @@ export function describeEvent(event: PlannerEvent, ctx: DescribeContext): EventV
     changes: eventChanges(event, ctx),
     revertible: isRevertible(event),
   };
+}
+
+/**
+ * "Cobus added an email address for Anna (anna@example.com)"; an archive is
+ * the same sentence with "removed" (SPEC 11.2). The address and the person
+ * both come from the event, so the sentence names them without a lookup.
+ */
+function describeUserEmail(event: PlannerEvent, ctx: DescribeContext): EventView {
+  const row = event.after ?? event.before ?? {};
+  const address = typeof row.address === "string" ? row.address : null;
+  const userId = typeof row.user_id === "string" ? row.user_id : null;
+  const known = userId !== null && ("get" in ctx.users ? ctx.users.has(userId) : ctx.users.some((u) => u.id === userId));
+  const who = known && userId !== null ? userName(userId, ctx.users) : null;
+  const added = event.action !== "archive";
+  return {
+    actor: actorLabel(eventActor(event), ctx.users),
+    verb: added ? "added" : "removed",
+    noun: `an email address${who === null ? "" : ` for ${who}`}${address === null ? "" : ` (${address})`}`,
+    title: null,
+    suffix: "",
+    changes: [],
+    // An added address can be removed again; a removal is final.
+    revertible: added && isRevertible(event),
+  };
+}
+
+/**
+ * The attachment events of one email in one sentence ("Planner listed an
+ * attachment (notes.pdf) on an email"): the email's title, when the screen
+ * knows it, comes before "on an email".
+ */
+function listedAttachments(rows: readonly PlannerEvent[], ctx: DescribeContext): EventView {
+  const first = rows[0];
+  if (!first) throw new Error("listedAttachments needs at least one event");
+  const captureId = typeof first.after?.capture_id === "string" ? first.after.capture_id : first.entity_id;
+  const title = ctx.titles[`capture:${captureId}`] ?? null;
+  const names = rows.map((row) => (typeof row.after?.filename === "string" && row.after.filename !== "" ? row.after.filename : "Attachment"));
+  const what = rows.length === 1 ? "an attachment" : `${rows.length} attachments`;
+  return {
+    actor: actorLabel(eventActor(first), ctx.users),
+    verb: "listed",
+    noun: `${what} (${names.join(", ")})`,
+    title,
+    suffix: "on an email",
+    changes: [],
+    revertible: false,
+  };
+}
+
+/** The events of the screen as one sentence each, in the order given. */
+export function eventSentences(events: readonly PlannerEvent[], ctx: DescribeContext): EventView[] {
+  const views: EventView[] = [];
+  let attachmentRows: PlannerEvent[] = [];
+  const flush = () => {
+    if (attachmentRows.length === 0) return;
+    views.push(listedAttachments(attachmentRows, ctx));
+    attachmentRows = [];
+  };
+  for (const event of events) {
+    // Several attachments listed at once are one sentence; anything else ends the run.
+    if (event.entity_type === "attachment") {
+      attachmentRows.push(event);
+      continue;
+    }
+    flush();
+    views.push(describeEvent(event, ctx));
+  }
+  flush();
+  return views;
 }

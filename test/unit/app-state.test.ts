@@ -9,7 +9,7 @@ import {
   rowKey,
   settleChange,
 } from "../../src/app/lib/state";
-import { ME, OTHER, bootstrap, changes, event, label, link, note, task } from "./app-fixtures";
+import { ME, OTHER, bootstrap, changes, event, label, link, note, task, userEmail } from "./app-fixtures";
 
 describe("fromBootstrap", () => {
   it("keys every collection by id and keeps archived labels", () => {
@@ -29,6 +29,19 @@ describe("fromBootstrap", () => {
     expect(state.me).toEqual(ME);
     expect(state.cursor).toBe("E10");
     expect(state.today).toBe("2026-10-14");
+  });
+
+  it("keeps open email addresses and drops archived ones", () => {
+    const state = fromBootstrap(
+      bootstrap({
+        user_emails: [
+          userEmail({ id: "M1", address: "cobus@example.com" }),
+          userEmail({ id: "M2", user_id: OTHER.id, address: "anna@example.com", archived_at: "2026-10-01T00:00:00.000Z" }),
+        ],
+      }),
+    );
+    expect([...state.emails.keys()]).toEqual(["M1"]);
+    expect(state.emails.get("M1")?.address).toBe("cobus@example.com");
   });
 });
 
@@ -67,6 +80,15 @@ describe("putRow", () => {
     if (!row) throw new Error("missing");
     expect(putRow(base, "note", row)).toBe(base);
   });
+
+  it("adds an email address and removes an archived one", () => {
+    const base = fromBootstrap(bootstrap({ user_emails: [userEmail({ id: "M1" })] }));
+    const added = putRow(base, "user_email", userEmail({ id: "M2", user_id: OTHER.id }));
+    expect(added.emails.get("M2")?.user_id).toBe(OTHER.id);
+    const archived = putRow(added, "user_email", userEmail({ id: "M1", archived_at: "2026-10-14T07:00:00.000Z" }));
+    expect(archived.emails.has("M1")).toBe(false);
+    expect(archived.emails.has("M2")).toBe(true);
+  });
 });
 
 describe("applyChanges", () => {
@@ -90,6 +112,23 @@ describe("applyChanges", () => {
     expect(next.users.get(OTHER.id)?.initials).toBe("AB");
     expect(next.settings.stt_keyterms).toEqual(["Planner"]);
     expect(next.cursor).toBe("E12");
+  });
+
+  it("brings a new email address from the change feed and drops an archived one", () => {
+    const base = fromBootstrap(bootstrap({ user_emails: [userEmail({ id: "M1", address: "cobus@example.com" })] }));
+    const next = applyChanges(
+      base,
+      changes({
+        events: [event({ seq: 11, entity_type: "user_email" }), event({ seq: 12, entity_type: "user_email" })],
+        user_emails: [
+          userEmail({ id: "M1", address: "cobus@example.com", archived_at: "2026-10-14T07:00:00.000Z" }),
+          userEmail({ id: "M2", user_id: OTHER.id, address: "anna@example.com" }),
+        ],
+        cursor: "E12",
+      }),
+    );
+    expect([...next.emails.keys()]).toEqual(["M2"]);
+    expect(next.emails.get("M2")?.address).toBe("anna@example.com");
   });
 
   it("leaves a row alone while a change of ours to it is in flight", () => {

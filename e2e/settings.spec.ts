@@ -78,6 +78,45 @@ test("a person can be renamed", async ({ page }) => {
   await api(page, "PATCH", `/api/users/${PERSON_2}`, { display_name: original.display_name, initials: original.initials });
 });
 
+test("an email address can be added for a person and removed", async ({ page }) => {
+  await signIn(page, 1);
+  await page.goto("/settings");
+  const address = `planner-${unique("x").replace(/\s+/g, "-").toLowerCase()}@example.com`;
+
+  const person1 = page.locator(".person-card").filter({ has: page.getByRole("heading", { name: " (you)" }) });
+  const person2 = page.locator(".person-card").filter({ hasNot: page.getByRole("heading", { name: " (you)" }) });
+  const field1 = person1.getByLabel("Add an email address");
+  const field2 = person2.getByLabel("Add an email address");
+
+  // Add it for Person 1 and see it listed.
+  await field1.fill(address);
+  await person1.getByRole("button", { name: "Add" }).click();
+  await expect(person1.getByText(address)).toBeVisible();
+  await expect(field1).toHaveValue("");
+  await expect
+    .poll(async () => (await bootstrap(page)).user_emails.filter((e) => e.archived_at === null).map((e) => e.address))
+    .toContain(address);
+
+  // The same address cannot belong to Person 2 as well.
+  await field2.fill(address);
+  await person2.getByRole("button", { name: "Add" }).click();
+  await expect(person2.getByRole("alert")).toContainText("already belongs to");
+  // The field keeps what was typed so it can be corrected.
+  await expect(field2).toHaveValue(address);
+  await expect
+    .poll(async () => (await bootstrap(page)).user_emails.filter((e) => e.archived_at === null && e.address === address).length)
+    .toBe(1);
+
+  // Remove it.
+  const row = person1.locator(".email-row").filter({ hasText: address });
+  await row.getByRole("button", { name: "Remove" }).click();
+  await row.locator(".confirm").getByRole("button", { name: "Remove" }).click();
+  await expect(person1.getByText(address)).toHaveCount(0);
+  await expect
+    .poll(async () => (await bootstrap(page)).user_emails.filter((e) => e.archived_at === null).map((e) => e.address))
+    .not.toContain(address);
+});
+
 test("keyterm prompting can be switched on and stays on", async ({ page }) => {
   await signIn(page, 1);
   await page.goto("/settings");

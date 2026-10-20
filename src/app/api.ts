@@ -287,6 +287,11 @@ export function captureAudioUrl(captureId: Id): string {
   return `/api/captures/${seg(captureId)}/audio`;
 }
 
+/** Where one attachment of an email capture downloads from (after the session check). */
+export function captureAttachmentUrl(captureId: Id, attachmentId: Id): string {
+  return `/api/captures/${seg(captureId)}/attachments/${seg(attachmentId)}`;
+}
+
 /** The conflicts of a 409 revert_conflict error, or null for any other error. */
 export function revertConflicts(err: unknown): RevertConflictView[] | null {
   if (!(err instanceof ApiError) || err.status !== 409 || err.code !== "revert_conflict") return null;

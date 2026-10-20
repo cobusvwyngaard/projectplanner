@@ -3,7 +3,7 @@ import { SELF } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { MutationResponse } from "../../src/shared/api";
 import type { Capture } from "../../src/shared/types";
-import { asUser } from "../helpers/api";
+import { asUser, fails } from "../helpers/api";
 import { USER_1, freshDb } from "../helpers/db";
 import { signIn, call } from "../helpers/auth";
 import { transcribeCapture } from "../../src/worker/captures/transcribe";
@@ -20,6 +20,30 @@ beforeEach(async () => {
   env.TRANSCRIBER = "mock";
   env.ELEVENLABS_API_KEY = "placeholder-not-a-real-key";
 });
+
+/** An email capture as receiving would have stored it: raw message in R2, row in D1 (SPEC 11.3). */
+async function createEmailCapture(id: string, status: "pending" | "failed"): Promise<string> {
+  const message =
+    [
+      "From: sender@example.org",
+      "To: reader@example.com",
+      "Subject: A note",
+      "Message-ID: <note@example.org>",
+      "",
+      "The body text.",
+      "",
+    ].join("\r\n");
+  const key = `emails/2026/10/${id}.eml`;
+  await env.AUDIO.put(key, new TextEncoder().encode(message), { httpMetadata: { contentType: "message/rfc822" } });
+  await db
+    .prepare(
+      `INSERT INTO captures (id, kind, author_user_id, r2_key, mime, text, transcript_status, inbox_status, created_at)
+       VALUES (?, 'email', NULL, ?, 'message/rfc822', NULL, ?, 'new', ?)`,
+    )
+    .bind(id, key, status, "2026-10-01T00:00:00.000Z")
+    .run();
+  return id;
+}
 
 
 
@@ -268,6 +292,43 @@ describe("manual retry", () => {
     expect(r.status).toBe(202);
   });
 
+  it("retries a voice capture with the transcriber", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const file = new File([bytes], "a.webm", { type: "audio/webm" });
+    const fd = new FormData();
+    fd.append("kind", "voice");
+    fd.append("file", file);
+    const res = await api.send<MutationResponse<Capture>>("POST", "/api/captures", fd);
+    const id = res.body.row.id;
+    // A failed transcription of good audio, as a flaky network would leave it.
+    await db
+      .prepare(`UPDATE captures SET transcript_status = 'failed', transcript_error = 'boom' WHERE id = ?`)
+      .bind(id)
+      .run();
+    const r = await api.post(`/api/captures/${id}/retry`);
+    expect(r.status).toBe(202);
+    const cap = await api.get<{ capture: Capture }>(`/api/captures/${id}`);
+    expect(cap.body.capture.transcript_status).toBe("done");
+    expect(cap.body.capture.text).toContain("Mock transcript");
+  });
+
+  it("retries a failed email capture by reading it again", async () => {
+    const id = await createEmailCapture("email-retry-1", "failed");
+    const r = await api.post(`/api/captures/${id}/retry`);
+    expect(r.status).toBe(202);
+    const cap = await api.get<{ capture: Capture }>(`/api/captures/${id}`);
+    expect(cap.body.capture.transcript_status).toBe("done");
+    expect(cap.body.capture.text).toContain("The body text.");
+    expect(cap.body.capture.text).not.toContain("Mock transcript");
+  });
+
+  it("409 for an email capture that is already read", async () => {
+    const id = await createEmailCapture("email-retry-2", "failed");
+    await db.prepare(`UPDATE captures SET transcript_status = 'done' WHERE id = ?`).bind(id).run();
+    const r = await api.post(`/api/captures/${id}/retry`);
+    expect(r.status).toBe(409);
+  });
+
   it("409 for text capture", async () => {
     const fd = new FormData();
     fd.append("kind", "text");
@@ -310,6 +371,30 @@ describe("inbox", () => {
     await api.patch(`/api/captures/${id}`, { text: "edited" });
     const evs = await db.prepare("SELECT actor_kind, action FROM events WHERE entity_type='capture' AND entity_id=?").bind(id).all<{ actor_kind: string; action: string }>();
     expect(evs.results.some((e) => e.actor_kind === "human" && e.action === "update")).toBe(true);
+  });
+
+  it("refuses to edit the text of an email capture and writes nothing", async () => {
+    const id = await createEmailCapture("email-edit-1", "failed");
+    const error = await fails(api.patch(`/api/captures/${id}`, { text: "edited" }), 400);
+    expect(error.message).toBe("The text of an email cannot be edited.");
+    const cap = await api.get<{ capture: Capture }>(`/api/captures/${id}`);
+    expect(cap.body.capture.text).toBeNull();
+    const events = await db
+      .prepare("SELECT COUNT(*) AS n FROM events WHERE entity_type = 'capture' AND entity_id = ?")
+      .bind(id)
+      .first<{ n: number }>();
+    expect(events?.n).toBe(0);
+  });
+
+  it("still moves an email capture in the inbox and notes on it", async () => {
+    const id = await createEmailCapture("email-edit-2", "failed");
+    const moved = await api.patch<{ row: Capture }>(`/api/captures/${id}`, {
+      inbox_status: "ignored",
+      processing_note: "Not for us.",
+    });
+    expect(moved.status).toBe(200);
+    expect(moved.body.row.inbox_status).toBe("ignored");
+    expect(moved.body.row.processing_note).toBe("Not for us.");
   });
 });
 

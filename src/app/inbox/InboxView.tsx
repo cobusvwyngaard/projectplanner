@@ -1,10 +1,19 @@
 // The Inbox: captures waiting to be processed, with editable transcripts.
 
-import { useCallback, useEffect, useState } from "react";
-import type { Capture, Id, User } from "../../shared/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Capture, EmailParticipant, Id, User } from "../../shared/types";
 import type { Run } from "../../shared/types";
 import type { CaptureDetailResponse, CapturesResponse } from "../../shared/api";
-import { api, errorMessage } from "../api";
+import { api, captureAttachmentUrl, errorMessage } from "../api";
+import {
+  attachmentKind,
+  collapseBody,
+  emailSubject,
+  formatSize,
+  participantChipLabel,
+  participantGroups,
+  parseParticipants,
+} from "../lib/email";
 import { useDraft } from "../hooks";
 import { navigate, openItem } from "../router";
 import { store, usePlanner } from "../store";
@@ -32,6 +41,7 @@ function formatDuration(seconds: number | null): string {
 function kindLabel(kind: Capture["kind"]): string {
   if (kind === "voice") return "Voice";
   if (kind === "file") return "Upload";
+  if (kind === "email") return "Email";
   return "Text";
 }
 
@@ -131,14 +141,13 @@ export function InboxView() {
     }
   }, []);
 
-  const toggleExpand = useCallback(async (id: Id) => {
-    setExpanded((prev) => {
-      const nextSet = new Set(prev);
-      if (nextSet.has(id)) nextSet.delete(id);
-      else nextSet.add(id);
-      return nextSet;
-    });
-    if (!details.has(id)) {
+  // Details load once and stay: for the "Show details" section, and for an
+  // email card's attachments, which arrive when the email has been read.
+  const detailPending = useRef<Set<Id>>(new Set());
+  const loadDetail = useCallback(
+    async (id: Id) => {
+      if (detailPending.current.has(id) || details.has(id)) return;
+      detailPending.current.add(id);
       try {
         const d = await api.capture(id);
         setDetails((prev) => {
@@ -149,9 +158,25 @@ export function InboxView() {
         mergeRuns(d.runs);
       } catch (err) {
         reportError(err);
+      } finally {
+        detailPending.current.delete(id);
       }
-    }
-  }, [details, mergeRuns]);
+    },
+    [details, mergeRuns],
+  );
+
+  const toggleExpand = useCallback(
+    async (id: Id) => {
+      setExpanded((prev) => {
+        const nextSet = new Set(prev);
+        if (nextSet.has(id)) nextSet.delete(id);
+        else nextSet.add(id);
+        return nextSet;
+      });
+      await loadDetail(id);
+    },
+    [loadDetail],
+  );
 
   return (
     <div className="page inbox">
@@ -202,6 +227,7 @@ export function InboxView() {
             detail={details.get(capture.id)}
             onToggleExpand={() => void toggleExpand(capture.id)}
             onUpdate={(body) => void updateCapture(capture.id, body)}
+            onLoadDetail={(id) => void loadDetail(id)}
           />
         ))}
       </ul>
@@ -225,13 +251,23 @@ interface CardProps {
   detail: CaptureDetailResponse | undefined;
   onToggleExpand: () => void;
   onUpdate: (body: { text?: string; inbox_status?: "new" | "ignored" | "processed" }) => void;
+  /** Ask the Inbox for this capture's detail (attachments, runs, items) */
+  onLoadDetail: (id: Id) => void;
 }
 
-function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, onUpdate }: CardProps) {
+function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, onUpdate, onLoadDetail }: CardProps) {
+  const isEmail = capture.kind === "email";
   const author = capture.author_user_id === null ? "Email" : users.get(capture.author_user_id)?.display_name ?? "Someone";
   const runId = capture.processed_by_run_id ?? capture.claimed_by_run_id;
   const run = runId ? runs.get(runId) ?? detail?.runs.find((r) => r.id === runId) : undefined;
   const actorName = run?.user_id ? users.get(run.user_id)?.display_name : undefined;
+
+  // An email card lists its attachments as soon as the email has been read.
+  useEffect(() => {
+    if (capture.kind === "email" && capture.transcript_status === "done" && detail === undefined) {
+      onLoadDetail(capture.id);
+    }
+  }, [capture.kind, capture.transcript_status, capture.id, detail, onLoadDetail]);
 
   const saveTranscript = useCallback(
     async (next: string) => {
@@ -252,7 +288,8 @@ function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, o
     }
   });
 
-  const retryTranscription = async () => {
+  // Retries a voice/file transcription, or reads an email again.
+  const retryCapture = async () => {
     try {
       const res = await api.retryCapture(capture.id);
       store.putCapture(res.capture);
@@ -262,47 +299,90 @@ function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, o
   };
 
   const showRetry =
-    capture.transcript_status === "failed" ||
-    (capture.transcript_status === "pending" &&
-      Date.now() - new Date(capture.created_at).getTime() > 10 * 60 * 1000);
+    !isEmail &&
+    (capture.transcript_status === "failed" ||
+      (capture.transcript_status === "pending" &&
+        Date.now() - new Date(capture.created_at).getTime() > 10 * 60 * 1000));
 
   return (
     <li className="capture-card" data-capture-id={capture.id}>
       <div className="capture-card-head">
-        <span className="capture-author">{author}</span>
+        {!isEmail && <span className="capture-author">{author}</span>}
         <TimeAgo ts={capture.created_at} />
         <span className="capture-kind">{kindLabel(capture.kind)}</span>
-        {capture.duration_s !== null && <span className="capture-duration">{formatDuration(capture.duration_s)}</span>}
+        {!isEmail && capture.duration_s !== null && (
+          <span className="capture-duration">{formatDuration(capture.duration_s)}</span>
+        )}
+        {capture.email_sender_verified === 0 && <span className="badge badge--warning">Sender not verified</span>}
       </div>
+
+      {capture.kind === "email" && <EmailHead capture={capture} users={users} />}
 
       {(capture.kind === "voice" || capture.kind === "file") && capture.r2_key && (
         <CaptureAudio captureId={capture.id} />
       )}
 
-      <div className="capture-transcript">
-        {capture.transcript_status === "pending" && <p className="muted">Transcribing…</p>}
-        {capture.transcript_status === "failed" && capture.transcript_error && (
-          <p className="notice notice--error" role="alert">{capture.transcript_error}</p>
-        )}
-        <textarea
-          className="input textarea"
-          value={draft.draft}
-          onChange={(e) => draft.change(e.target.value)}
-          onBlur={() => void draft.commit()}
-          rows={4}
-        />
-        {draft.error && <p className="field-error" role="alert">{draft.error}</p>}
-        <div className="button-row">
-          <button type="button" className="button button--small" disabled={draft.saving} onClick={() => void draft.commit()}>
-            {draft.saving ? "Saving…" : "Save"}
-          </button>
+      {isEmail && (
+        <div className="capture-transcript">
+          {capture.transcript_status === "pending" && <p className="muted">Reading the email…</p>}
+          {capture.transcript_status === "failed" && capture.transcript_error && (
+            <p className="notice notice--error" role="alert">{capture.transcript_error}</p>
+          )}
+          {capture.transcript_status === "done" && <EmailBody text={capture.text ?? ""} />}
         </div>
-      </div>
+      )}
+
+      {!isEmail && (
+        <div className="capture-transcript">
+          {capture.transcript_status === "pending" && <p className="muted">Transcribing…</p>}
+          {capture.transcript_status === "failed" && capture.transcript_error && (
+            <p className="notice notice--error" role="alert">{capture.transcript_error}</p>
+          )}
+          <textarea
+            className="input textarea"
+            value={draft.draft}
+            onChange={(e) => draft.change(e.target.value)}
+            onBlur={() => void draft.commit()}
+            rows={4}
+          />
+          {draft.error && <p className="field-error" role="alert">{draft.error}</p>}
+          <div className="button-row">
+            <button type="button" className="button button--small" disabled={draft.saving} onClick={() => void draft.commit()}>
+              {draft.saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isEmail && capture.transcript_status === "failed" && (
+        <button type="button" className="button button--small" onClick={() => void retryCapture()}>
+          Retry
+        </button>
+      )}
 
       {showRetry && (
-        <button type="button" className="button button--small" onClick={() => void retryTranscription()}>
+        <button type="button" className="button button--small" onClick={() => void retryCapture()}>
           Retry transcription
         </button>
+      )}
+
+      {isEmail && detail !== undefined && detail.attachments.length > 0 && (
+        <ul className="email-attachments">
+          {detail.attachments.map((attachment) => (
+            <li key={attachment.id}>
+              {attachment.too_large === 1 ? (
+                <span className="muted">
+                  {attachment.filename} · {attachmentKind(attachment.filename, attachment.mime)} · Too large to keep
+                </span>
+              ) : (
+                <a href={captureAttachmentUrl(capture.id, attachment.id)} download={attachment.filename}>
+                  {attachment.filename} · {attachmentKind(attachment.filename, attachment.mime)} ·{" "}
+                  {formatSize(attachment.size_bytes)}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
       {runId && (
@@ -371,5 +451,65 @@ function CaptureCard({ capture, users, runs, expanded, detail, onToggleExpand, o
         </div>
       )}
     </li>
+  );
+}
+
+/** The subject, the sender and the people of an email capture (SPEC 11.3). */
+function EmailHead({ capture, users }: { capture: Capture; users: ReadonlyMap<Id, User> }) {
+  const participants = parseParticipants(capture.email_participants_json);
+  const sender = participants.find((person) => person.role === "from");
+  const senderName = sender?.name ?? "";
+  const senderAddress = sender?.address ?? capture.email_from ?? "";
+  return (
+    <>
+      <h3 className="email-subject">{emailSubject(capture.email_subject)}</h3>
+      <p className="email-sender">
+        {senderName !== "" && <span className="capture-author">{senderName}</span>}
+        <span className="muted small">{senderAddress}</span>
+      </p>
+      <ParticipantChips participants={participants} users={users} />
+    </>
+  );
+}
+
+/** The From, To and Cc people as chips: a planner person's name, or the address. */
+function ParticipantChips({
+  participants,
+  users,
+}: {
+  participants: readonly EmailParticipant[];
+  users: ReadonlyMap<Id, User>;
+}) {
+  const groups = participantGroups(participants);
+  if (groups.length === 0) return null;
+  return (
+    <div className="email-participants">
+      {groups.map((group) => (
+        <p className="email-participants-row" key={group.role}>
+          <span className="email-participants-label">{group.label}</span>
+          {group.people.map((person) => (
+            <span className="email-chip" key={`${person.role}:${person.address}`}>
+              {participantChipLabel(person, users)}
+            </span>
+          ))}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** The body of a read email: plain text, collapsed after the first lines. */
+function EmailBody({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const body = collapseBody(text, open);
+  return (
+    <div className="email-body">
+      <p className="email-body-text">{body.shown}</p>
+      {body.collapsible && (
+        <button type="button" className="link-button" onClick={() => setOpen(!open)}>
+          {open ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
   );
 }

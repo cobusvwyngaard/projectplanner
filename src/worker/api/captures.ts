@@ -11,6 +11,7 @@ import { mutate } from "../mutate/index";
 import { actorOf, mutationResponse, queryParams } from "./request";
 import { captureKey } from "../captures/storage";
 import { transcribeCapture } from "../captures/transcribe";
+import { readEmail } from "../email/read";
 import { reset as resetLease } from "../captures/lease";
 import { attachmentsForCapture, rowsByIds, selectEvents } from "../board/queries";
 import { titlesFor } from "../board/titles";
@@ -251,6 +252,9 @@ export const capturesRouter = new Hono<AppBindings>()
     const capture = await loadCapture(db, id);
     if (!capture) throw new NotFoundError(`No capture with id ${id}.`);
     const body = await jsonBody(c, updateCapture);
+    if (body.text !== undefined && capture.kind === "email") {
+      throw new ValidationError("The text of an email cannot be edited.");
+    }
     if (body.inbox_status !== undefined && capture.inbox_status === "claimed") {
       throw new ConflictError("A claimed capture cannot be moved in the inbox.");
     }
@@ -273,17 +277,19 @@ export const capturesRouter = new Hono<AppBindings>()
     const id = c.req.param("id");
     const capture = await loadCapture(db, id);
     if (!capture) throw new NotFoundError(`No capture with id ${id}.`);
-    if (capture.kind !== "voice" && capture.kind !== "file") {
-      throw new ConflictError("Only voice or file captures can be retried.");
+    if (capture.kind === "text") {
+      throw new ConflictError("Only voice, file or email captures can be retried.");
     }
     if (capture.transcript_status !== "pending" && capture.transcript_status !== "failed") {
       throw new ConflictError("This capture cannot be retried right now.");
     }
     await resetLease(db, id);
+    // An email is read again, not transcribed; the work is the same either way.
+    const work = capture.kind === "email" ? readEmail(c.env, id) : transcribeCapture(c.env, id);
     if (c.executionCtx && typeof c.executionCtx.waitUntil === "function") {
-      c.executionCtx.waitUntil(transcribeCapture(c.env, id));
+      c.executionCtx.waitUntil(work);
     } else {
-      void transcribeCapture(c.env, id);
+      void work;
     }
     const fresh = await loadCapture(db, id);
     return c.json({ capture: fresh ?? capture }, 202);

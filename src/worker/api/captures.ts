@@ -19,6 +19,7 @@ import type { Capture, CaptureAttachment } from "../../shared/types";
 import type { CaptureDetailResponse, CapturesResponse } from "../../shared/api";
 import type { PlannerEvent } from "../../shared/types";
 import { EVENT_COLUMNS } from "../mutate/events";
+import { readEmail } from "../email/read";
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_TEXT = 20000;
@@ -258,6 +259,9 @@ export const capturesRouter = new Hono<AppBindings>()
     if (body.text !== undefined) patch.text = body.text;
     if (body.inbox_status !== undefined) patch.inbox_status = body.inbox_status;
     if (body.processing_note !== undefined) patch.processing_note = body.processing_note;
+    if (capture.kind === "email") {
+      delete (patch as any).text;
+    }
     const result = await mutate(db, actorOf(c), {
       entity: "capture",
       action: "update",
@@ -273,6 +277,19 @@ export const capturesRouter = new Hono<AppBindings>()
     const id = c.req.param("id");
     const capture = await loadCapture(db, id);
     if (!capture) throw new NotFoundError(`No capture with id ${id}.`);
+    if (capture.kind === "email") {
+      if (capture.transcript_status !== "pending" && capture.transcript_status !== "failed") {
+        throw new ConflictError("This capture cannot be retried right now.");
+      }
+      await resetLease(db, id);
+      if (c.executionCtx && typeof c.executionCtx.waitUntil === "function") {
+        c.executionCtx.waitUntil(readEmail(c.env, id));
+      } else {
+        void readEmail(c.env, id);
+      }
+      const fresh = await loadCapture(db, id);
+      return c.json({ capture: fresh ?? capture }, 202);
+    }
     if (capture.kind !== "voice" && capture.kind !== "file") {
       throw new ConflictError("Only voice or file captures can be retried.");
     }

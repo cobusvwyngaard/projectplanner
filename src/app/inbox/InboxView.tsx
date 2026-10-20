@@ -32,6 +32,7 @@ function formatDuration(seconds: number | null): string {
 function kindLabel(kind: Capture["kind"]): string {
   if (kind === "voice") return "Voice";
   if (kind === "file") return "Upload";
+  if (kind === "email") return "Email";
   return "Text";
 }
 

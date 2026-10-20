@@ -247,13 +247,28 @@ move Proton's mail too. Use either
 4. **Email Routing → Routes**: create a custom address, for example
    `inbox@planner.example.co.za`, with the action **Send to a Worker**, and
    choose `projectplanner`. A catch-all route sends every address on the
-   (sub)domain to the Worker if you would rather not name one.
-5. Register the addresses people send from or are sent to: open the planner →
-   **Settings → People** and add each address under the right person. The
-   address list in Settings arrives with the email part of the app; until it
-   ships, the same list is reachable as a signed-in `POST
-   /api/users/<user id>/emails` (body `{ "address": "..." }`), and an address
-   is archived with `POST /api/user-emails/<id>/archive`.
+   (sub)domain to the Worker if you would rather not name one. The exact steps
+   for the receiving address follow once the domain is chosen.
+5. Register the addresses people send from or are sent to (see **Registering
+   addresses** below).
+
+### Registering addresses
+
+Open the planner → **Settings → People**. Under a person, type an address in
+**Add an email address** and click **Add**; **Remove** (which asks first)
+takes it away again.
+
+- Each person may have one or more addresses, and an address belongs to one
+  person only. Adding one that belongs to someone else is refused with the
+  name of that person.
+- An address is what lets mail in: a message is accepted only when a
+  registered address is the verified sender or appears in its To or Cc. Mail
+  from anyone else is refused and nothing is stored.
+- A message whose sender cannot be verified (no passing SPF/DKIM/DMARC, or no
+  such results at all) is still accepted when a registered address is in To or
+  Cc, and the card in the Inbox says "Sender not verified".
+- Removing an address stops mail to and from it, and frees it for another
+  person later.
 
 ### What is accepted, and what is stored
 

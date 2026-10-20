@@ -472,6 +472,20 @@ at the bottom of each section.
 - **The cron routes by kind.** A due `email` capture goes to `readEmail`, never
   to the audio transcriber, even though both share `transcript_status` and the
   15-minute lease.
+- **Email text cannot be edited by people.** The body of an email capture is the
+  record of what was received, so `PATCH /api/captures/:id` refuses a `text` for
+  an `email` capture ("The text of an email cannot be edited.") and the Inbox
+  shows it as text rather than in the editable transcript box that a voice or
+  file capture gets. `mutate`'s `capture` entity still allows a human to write
+  `text`, because that is how a transcript is corrected; the refusal is the
+  route's rule (SPEC 11.3). `inbox_status` and `processing_note` stay writable,
+  so an email can still be ignored or marked processed.
+- **Retry re-reads an email.** A capture read that failed is repaired by reading
+  the message in R2 again, not by typing a body: the card's Retry button calls
+  `POST /api/captures/:id/retry`, which resets the transcription lease and runs
+  `readEmail` for an `email` capture (`transcribeCapture` for voice and file),
+  so a fixed parser or a transient R2 error can be recovered without a new
+  delivery of the message.
 - **`htmlToText` lives in `src/worker/email/body.ts`**, free of Worker
   bindings, so it is unit-testable; the email tests are in `test/worker/`
   because `tsconfig.node.json` does not include files under `src/worker`.

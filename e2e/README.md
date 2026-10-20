@@ -35,6 +35,37 @@ Secure cookies there; the `__Host-` prefix is satisfied as well. No test-only
 change to the cookie is needed, and production keeps the Secure cookie as it
 is. `auth.spec.ts` checks the cookie's flags and lifetime.
 
+## The email simulator
+
+`wrangler dev` runs a local copy of Cloudflare's email delivery. `email.spec.ts`
+uses it to hand the Worker's `email()` handler a raw message:
+
+```
+POST http://localhost:8788/cdn-cgi/handler/email?from=<envelope sender>&to=<envelope recipient>
+Content-Type: message/rfc822
+
+<the raw message, with CRLF line endings>
+```
+
+The envelope addresses are query parameters; the message's own `From`/`To`
+headers are what the Worker reads. An accepted message answers 200; a message
+the Worker refuses with `setReject` answers 400, with the reason in the
+server's log. Nothing is relayed off the machine.
+
+Locally there is no `Authentication-Results` header (Cloudflare adds it in
+production), so every sender counts as not verified and a message is accepted
+only when a registered address is in its To or Cc — which is exactly the rule
+`email.spec.ts` drives. It registers a made-up address for Person 1 in
+Settings › People, posts a multipart message from an unregistered
+`out@example.org` to `planner@example.com` with that address in Cc, and checks
+the Inbox card (kind "Email", "Sender not verified", Person 1 in the Cc group,
+the body text, and the attachment "notes.txt · TXT · <size> B"), then that the
+attachment link downloads the attached text. It then posts a message with no
+registered address anywhere (400, and no card), and delivers the first message
+again (200, still one card). It removes the address at the end. The Message-ID
+is what the Worker dedupes on, so each message it posts carries its own made-up
+one.
+
 ## What is covered
 
 | File | SPEC phase 1 check |
@@ -47,5 +78,6 @@ is. `auth.spec.ts` checks the cookie's flags and lifetime.
 | `panel.spec.ts` | A due date typed with the keyboard is saved once, when whole (in whatever part order the browser uses); a half-typed date is not saved; Back on a phone saves what was typed; closing the panel returns focus to the list row or card; a done task taken off the board is not pointed to the tray |
 | `layout.spec.ts` | Who last changed a task is shown in full on its card (wide and phone screens); the Activity date filters fit a 390 px phone |
 | `claude.spec.ts` | A real OAuth connection from a local tool runs Claude's tools over a capture: the processed capture points at its run, the run shows its intent and summary in Activity, the task and note carry Claude's provenance, reverting the run removes both, and Settings › Claude connections lists the connection, disconnects it and leaves its old token answered with a 401 |
+| `email.spec.ts` | Through wrangler's local email simulator: an address registered in Settings › People lets a stranger's message in when it is in Cc; the Inbox card shows the kind, "Sender not verified", Person 1 in the Cc group, the body and the attachment with its size; the attachment downloads as the attached text; a message with no registered address anywhere is refused and leaves no card; a redelivery of the same Message-ID leaves exactly one card |
 
 Results and traces of failures go to `test-results/` (git-ignored).

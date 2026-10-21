@@ -45,18 +45,23 @@ Wanted:
 - The board draws it as an arrow from A to B; the List view and the item
   panel say it in words.
 
-Proposed details (to confirm with the owner):
+Details (proposed; owner decisions marked):
 - Two kinds of link: **depends on** (task to task only, directed) and
   **related** (any note or task, undirected, as today). Existing links become
   "related"; a migration adds the kind and keeps every current link.
 - The item panel shows "Waits for: A" on B and "Needed for: B" on A, and lets
-  a person make, reverse or remove a dependency; on the board, drawing a
-  connection between two tasks asks "depends on" or "related" (or uses a
-  default the owner chooses).
+  a person make, reverse or remove a dependency.
+- **Owner decision (2026-10-21):** on the board, drawing a connection from
+  task A to task B makes "B depends on A" straight away, in the direction
+  drawn, with a quick way to change it on the link itself (reverse it, or
+  make it "related"). A connection that involves a note is "related".
 - Circular dependencies (A waits for B waits for A) are refused.
 - An open task that waits for an open task shows "Waiting for A" on its card
-  and in the lists. Open question for the owner: should ticking it off first
-  only warn, or be refused?
+  and in the lists.
+- **Owner decision (2026-10-21):** ticking off a task whose prerequisite is
+  still open only warns ("A is not done yet"); it is never refused. This
+  applies to Claude too: the write succeeds and the tool result carries the
+  warning.
 - Claude: link_items gets a kind (and direction), its description explains
   when a dependency is right (the capture says one thing must happen before
   another) versus a plain link, and get_board returns the kind and

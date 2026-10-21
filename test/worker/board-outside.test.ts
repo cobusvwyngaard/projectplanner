@@ -10,7 +10,7 @@ import worker from "../../src/worker/index";
 import { fromOutsideFor, taskViews } from "../../src/worker/board/provenance";
 import { getRow, openTasks, rowsByIds } from "../../src/worker/board/queries";
 import { getBoard } from "../../src/worker/mcp/tools/read";
-import { claudeActor, SYSTEM_ACTOR } from "../../src/worker/mutate/actor";
+import { claudeActor } from "../../src/worker/mutate/actor";
 import { mutate } from "../../src/worker/mutate/index";
 import { asUser, ok } from "../helpers/api";
 import { USER_1, USER_2, freshDb, openRun } from "../helpers/db";
@@ -238,20 +238,6 @@ describe("tasks from outside senders", () => {
       .first<{ id: string }>();
     const feed = await ok(api.get<ChangesResponse>(`/api/changes?since=${captureEvent?.id}`));
     expect(feed.tasks.find((t) => t.id === taskId)?.from_outside).toBe("unregistered");
-
-    // A change to the source capture itself reaches the task it sourced.
-    await mutate(db, SYSTEM_ACTOR, {
-      entity: "capture",
-      action: "update",
-      id: captureId,
-      patch: { text: "Re-read by the inbox." },
-    });
-    const taskEvent = await db
-      .prepare(`SELECT id FROM events WHERE entity_type = 'task' ORDER BY seq LIMIT 1`)
-      .first<{ id: string }>();
-    const resourced = await ok(api.get<ChangesResponse>(`/api/changes?since=${taskEvent?.id}`));
-    expect(resourced.events.some((e) => e.entity_type === "capture")).toBe(true);
-    expect(resourced.tasks.some((t) => t.id === taskId && t.from_outside === "unregistered")).toBe(true);
 
     const updated = await ok(
       asUser(USER_1).patch<MutationResponse<TaskView>>(`/api/tasks/${taskId}`, { title: "Book the venue now" }),

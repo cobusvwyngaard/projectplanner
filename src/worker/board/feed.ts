@@ -18,7 +18,6 @@ import {
   openTasks,
   rowsByIds,
   selectEvents,
-  selectInChunks,
 } from "./queries";
 
 /** Most events one /api/changes response carries. */
@@ -93,14 +92,9 @@ export async function loadChanges(db: D1Database, since: Id | undefined): Promis
   if (events.length === 0) return emptyChanges(since, false);
 
   const touched = (type: EntityType) => idsOf(events, type);
-  const named = touched("task");
-  // The tasks sent for their own events, plus the other tasks that named one
-  // of those events' captures: their outside-sender flag may have changed too.
-  const resourced = await resourcedTasks(db, named, events);
-  const taskIds = named.concat(resourced);
   const [notes, tasks, links, labels, users, userEmails, captures, attachments, settings] = await Promise.all([
     rowsByIds(db, "note", touched("note")).then((rows) => noteViews(db, rows)),
-    rowsByIds(db, "task", taskIds).then((rows) => taskViews(db, rows)),
+    rowsByIds(db, "task", touched("task")).then((rows) => taskViews(db, rows)),
     rowsByIds(db, "link", touched("link")),
     rowsByIds(db, "label", touched("label")),
     rowsByIds(db, "user", touched("user")),
@@ -124,30 +118,6 @@ export async function loadChanges(db: D1Database, since: Id | undefined): Promis
     more,
     reset: false,
   };
-}
-
-/**
- * The other tasks that named one of this page's changed captures as a source,
- * so the outside-sender flag the app holds for them is never stale.
- */
-export async function resourcedTasks(
-  db: D1Database,
-  namedTaskIds: readonly Id[],
-  events: readonly PlannerEvent[],
-): Promise<Id[]> {
-  const captureIds = [...new Set(events.filter((e) => e.entity_type === "capture").map((e) => e.entity_id))];
-  if (captureIds.length === 0) return [];
-  const named = new Set(namedTaskIds);
-  const ids = await selectInChunks<{ entity_id: Id }>(db, captureIds, (part, marks) =>
-    db
-      .prepare(
-        `SELECT DISTINCT entity_id FROM events
-         WHERE entity_type = 'task'
-           AND EXISTS (SELECT 1 FROM json_each(source_capture_ids) AS s WHERE s.value IN (${marks}))`,
-      )
-      .bind(...part),
-  );
-  return ids.map((r) => r.entity_id).filter((id) => !named.has(id));
 }
 
 function idsOf(events: readonly PlannerEvent[], type: EntityType): Id[] {

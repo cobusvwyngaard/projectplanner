@@ -105,6 +105,11 @@ at the bottom of each section.
   page of tasks, so marking tasks never becomes a query per task. The app
   only displays it: the tray sorts flagged tasks below all others, and the
   tray item, board card, List view and item panel show the reason in red.
+  The email fields it depends on are fixed when the email arrives, so a
+  task's flag changes only through a new event on the task itself; the change
+  feed therefore sends a task only for its own events and does not search
+  other tasks' sources when a capture changes (that would scan the whole
+  history on many polls, against D1's daily read allowance).
 
 ## Login, sessions and OAuth
 

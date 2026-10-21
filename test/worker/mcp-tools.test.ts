@@ -858,6 +858,132 @@ describe("update_task", () => {
   });
 });
 
+describe("assigning tasks whose sources are emails (SPEC 11.4)", () => {
+  const PARTICIPANTS: EmailParticipant[] = [
+    { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+    { address: "two@example.com", name: "Person 2", role: "cc", user_id: USER_2 },
+  ];
+  const WITHOUT_TWO: EmailParticipant[] = [
+    { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+    { address: "guest@example.org", name: "Guest", role: "to", user_id: null },
+  ];
+
+  it("allows an assignee who is a participant of the source email", async () => {
+    const email = await newEmailCapture({ participants: PARTICIPANTS });
+    const task = await newTask();
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    const created = await createTask(ctx(), {
+      run_id: run,
+      title: "Book the cottage",
+      assignee_id: USER_2,
+      source_capture_ids: [email],
+    });
+    const createdRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(created.id).first();
+    expect(createdRow).toMatchObject({ assignee_id: USER_2 });
+
+    await updateTask(ctx(), {
+      run_id: run,
+      id: task,
+      patch: { assignee_id: USER_2 },
+      source_capture_ids: [email],
+    });
+    const updatedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task).first();
+    expect(updatedRow).toMatchObject({ assignee_id: USER_2 });
+  });
+
+  it("refuses an assignee who is not on the source email, and writes nothing", async () => {
+    const email = await newEmailCapture({ participants: WITHOUT_TWO });
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    const call = createTask(ctx(), {
+      run_id: run,
+      title: "Book the cottage",
+      assignee_id: USER_2,
+      source_capture_ids: [email],
+    });
+    await expect(call).rejects.toBeInstanceOf(ValidationError);
+    await expect(call).rejects.toThrow("That person is not on the source email; leave the task unassigned.");
+    expect(await count("tasks")).toBe(0);
+    expect(await count("events")).toBe(0);
+  });
+
+  it("refuses the same on update_task, leaving the task and its history untouched", async () => {
+    const email = await newEmailCapture({ participants: WITHOUT_TWO });
+    const task = await newTask();
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+    const eventsBefore = await count("events");
+
+    await expect(
+      updateTask(ctx(), { run_id: run, id: task, patch: { assignee_id: USER_2 }, source_capture_ids: [email] }),
+    ).rejects.toThrow("That person is not on the source email; leave the task unassigned.");
+    const row = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task).first();
+    expect(row).toMatchObject({ assignee_id: null });
+    expect(await count("events")).toBe(eventsBefore);
+  });
+
+  it("leaves writes alone when the sources are mixed, absent, or nobody is assigned", async () => {
+    const email = await newEmailCapture({ participants: WITHOUT_TWO });
+    const text = await newCapture("A typed thought");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    // Mixed sources are not held to the participant rule.
+    const mixed = await createTask(ctx(), {
+      run_id: run,
+      title: "Mixed sources",
+      assignee_id: USER_2,
+      source_capture_ids: [email, text],
+    });
+    const mixedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(mixed.id).first();
+    expect(mixedRow).toMatchObject({ assignee_id: USER_2 });
+
+    // No email sources at all: unchanged.
+    const plain = await createTask(ctx(), {
+      run_id: run,
+      title: "No email involved",
+      assignee_id: USER_2,
+      source_capture_ids: [text],
+    });
+    const plainRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(plain.id).first();
+    expect(plainRow).toMatchObject({ assignee_id: USER_2 });
+
+    // All-email sources but nobody assigned: fine.
+    const unassigned = await createTask(ctx(), {
+      run_id: run,
+      title: "Nobody yet",
+      source_capture_ids: [email],
+    });
+    const unassignedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(unassigned.id).first();
+    expect(unassignedRow).toMatchObject({ assignee_id: null });
+
+    // Clearing an assignee from an email-only write is allowed too.
+    const task = await newTask();
+    await updateTask(ctx(), {
+      run_id: run,
+      id: task,
+      patch: { assignee_id: null },
+      source_capture_ids: [email],
+    });
+    const clearedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task).first();
+    expect(clearedRow).toMatchObject({ assignee_id: null });
+  });
+
+  it("allows the assignee when only one of several email sources has them on it", async () => {
+    const withTwo = await newEmailCapture({ participants: PARTICIPANTS });
+    const withoutTwo = await newEmailCapture({ participants: WITHOUT_TWO });
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    const created = await createTask(ctx(), {
+      run_id: run,
+      title: "Asked of Person 2 in one email",
+      assignee_id: USER_2,
+      source_capture_ids: [withoutTwo, withTwo],
+    });
+    const row = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(created.id).first();
+    expect(row).toMatchObject({ assignee_id: USER_2 });
+  });
+});
+
 describe("link_items and unlink_items", () => {
   it("links two open items once, and unlinks them again", async () => {
     const note = await newNote();

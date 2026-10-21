@@ -123,3 +123,10 @@ export const InboxIcon = () => (
     <path d="M4 12h4.5l1.5 2.5h4l1.5-2.5H20" />
   </Icon>
 );
+
+export const KeyboardIcon = () => (
+  <Icon>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+  </Icon>
+);

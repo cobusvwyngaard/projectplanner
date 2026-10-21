@@ -236,6 +236,10 @@ at the bottom of each section.
   is refused with "That person is not on the source email; leave the task
   unassigned." and nothing is written. Writes with no email sources, mixed
   sources, or no assignee are unchanged.
+  This narrows what a crafted email can do but is not a complete barrier:
+  a write that names no source capture, or also names a capture that is not
+  an email, is not checked, so the Activity view and run revert remain the
+  way to catch a wrong assignment.
 - **Attribution and undo come from the write path.** All writes use
   `claudeActor(userId, run_id)`, so every event carries
   `actor_kind='claude'`, the approving user (from the grant props) and the

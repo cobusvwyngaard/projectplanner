@@ -195,6 +195,29 @@ file name (both `filename=` and `filename*`); a row with no stored content is a
 objects are never public, and nothing on this path logs an address, subject,
 body, file name or header value.
 
+The Inbox shows an email capture as a card (`src/app/inbox/InboxView.tsx`): the
+kind "Email", a "Sender not verified" badge when `email_sender_verified` is 0,
+the subject and sender, the From/To/Cc people as chips (a chip names the planner
+person an address maps to, else the address), the plain-text body (collapsed
+after `COLLAPSED_EMAIL_LINES`, with a "Show more" toggle), and the attachments
+as download links reading "name · TYPE · size". The card's helpers —
+`formatSize`, `attachmentKind`, `emailSubject`, `parseParticipants`,
+`participantGroups`, `participantChipLabel`, `collapseBody` — are pure
+functions in `src/app/lib/email.ts` with unit tests. An email's body is not a
+field anyone can type into: the card shows it as text, and
+`PATCH /api/captures/:id` refuses an edit to the text of an email. A read that
+failed leaves the card with its error and a **Retry** button, which
+`POST /api/captures/:id/retry` answers by resetting the lease and re-reading the
+message through `readEmail` (a voice or file capture goes to the transcriber
+instead); the cron routes a due `email` capture the same way.
+
+The email path and the Inbox card are covered end to end by
+`e2e/email.spec.ts`, against wrangler's local email simulator: a registered
+address in Cc lets a stranger's message through, the card shows its body and
+attachment, the attachment downloads as the text that was attached, a message
+with no registered address in From/To/Cc is refused with a 400, and a
+redelivery of the same Message-ID leaves one card (see `e2e/README.md`).
+
 ## MCP layer
 
 The connector Claude talks to (SPEC sections 5 and 7) has three layers:
@@ -287,3 +310,7 @@ assets (`miniflare.assets.directory`), so they do not depend on a build.
 The Playwright smoke tests (`e2e/`, see `e2e/README.md`) start
 `scripts/e2e-server.mjs`: a fresh local D1 in `.wrangler/e2e`, migrations
 applied, then `wrangler dev` on port 8788, which builds the app first.
+`e2e/email.spec.ts` posts raw messages to wrangler's local email simulator
+(`POST /cdn-cgi/handler/email?from=…&to=…`), which delivers them to the
+Worker's `email()` handler and answers 200 when the message was accepted and
+400 when the Worker refused it.

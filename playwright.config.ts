@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Offline has to reach the service worker's own fetch() calls as well, or a
+// page it controls would still be answered by the network it talks to.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = "1";
+
 // Smoke tests of phase 1 against `wrangler dev` with a fresh local database
 // (scripts/e2e-server.mjs). See e2e/README.md.
 export default defineConfig({

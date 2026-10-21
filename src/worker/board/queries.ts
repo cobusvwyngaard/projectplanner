@@ -154,6 +154,14 @@ export function attachmentsForCapture(db: D1Database, captureId: Id): Promise<Ca
     .then((r) => r.results);
 }
 
+/** Attachments of several captures in one query, oldest first within each capture. */
+export function attachmentsForCaptures(db: D1Database, captureIds: readonly Id[]): Promise<CaptureAttachment[]> {
+  const t = TABLES.attachment;
+  return selectInChunks<CaptureAttachment>(db, captureIds, (part, marks) =>
+    db.prepare(`SELECT ${t.columns} FROM ${t.table} WHERE capture_id IN (${marks}) ORDER BY created_at, id`).bind(...part),
+  );
+}
+
 /** Id and seq of the newest event, or null when nothing has happened yet. */
 export async function newestEvent(db: D1Database): Promise<{ id: Id; seq: number } | null> {
   return db.prepare(`SELECT id, seq FROM events ORDER BY seq DESC LIMIT 1`).first<{ id: Id; seq: number }>();

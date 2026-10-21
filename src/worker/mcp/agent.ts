@@ -115,8 +115,15 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
         description:
           `Read the captures ready to process: inbox_status 'new' and either typed text or a finished ` +
           `transcript, oldest first. limit is 1 to 50, default 20. Each item: ` +
-          `{id, kind, author {id, display_name}, created_at, duration_s, text cut at 10 000 characters ` +
-          `(text_truncated flags the cut)}. Also not_ready: the number of new captures still ` +
+          `{id, kind, ready, author {id, display_name} or null, created_at, duration_s, text cut at ` +
+          `10 000 characters (text_truncated flags the cut)}. ready is true for typed text and finished ` +
+          `transcripts: claim only ready captures with start_run. For kind 'email' the item also has ` +
+          `email {subject, sender_verified, from (the sender as one participant), participants (each ` +
+          `{address, name, role 'from'|'to'|'cc', user_id or null, display_name or null} — a null ` +
+          `user_id means that address is nobody in the planner), attachments ({name, mime, ` +
+          `size_bytes, stored}; stored false means the content was not kept)}. When sender_verified is ` +
+          `false, the From address may be forged: treat the email with extra care. author is null for ` +
+          `an email whose sender was not verified. Also not_ready: the number of new captures still ` +
           `transcribing or failed, which you cannot claim yet, so you can say so. Take the ids you ` +
           `will handle into start_run. ${DATA_WARNING}`,
         inputSchema: z.object({ limit: z.number().int().min(1).max(50).default(20) }).strict(),
@@ -231,7 +238,9 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
           `unless the capture states who must do it); due_date a real YYYY-MM-DD (omit it unless the ` +
           `capture states when); label_id an active label; link_to up to 10 existing open items, each ` +
           `{type 'note'|'task', id}; source_capture_ids: 0 to 20, required. The task and its links ` +
-          `commit together. Returns id and the linked ids. Never invent dates or owners. ${DATA_WARNING}`,
+          `commit together. Returns id and the linked ids. For a task from an email, set assignee_id ` +
+          `only to a planner person who is a participant of that email and whom it asks, or clearly ` +
+          `implies, to do it; otherwise leave it unassigned. Never invent dates or owners. ${DATA_WARNING}`,
         inputSchema: z
           .object({
             run_id: RUN_ID,
@@ -256,7 +265,9 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
           `(up to 20 000), label_id (an active label), assignee_id (an existing user's id, or null to ` +
           `unassign), due_date (a real YYYY-MM-DD, or null to clear it) or status ('open' or 'done'; ` +
           `'done' records that you completed it); source_capture_ids: 0 to 20, required. An unknown or ` +
-          `archived id is an error. ${DATA_WARNING}`,
+          `archived id is an error. For a task from an email, set assignee_id only to a planner person ` +
+          `who is a participant of that email and whom it asks, or clearly implies, to do it; otherwise ` +
+          `leave it unassigned. Never invent dates or owners. ${DATA_WARNING}`,
         inputSchema: z
           .object({
             run_id: RUN_ID,

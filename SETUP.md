@@ -314,7 +314,7 @@ takes it away again.
 
 - [ ] Send an email from a registered address to the planner address and check that it appears in the Inbox with its body.
 - [ ] Send one with an attachment and check that the file downloads.
-- [ ] Have someone outside the planner send an email to a registered address with the planner address in Cc, and check that it is accepted and marked "Sender not verified".
+- [ ] Have someone outside the planner send an email to a registered address with the planner address in Cc, and check that it is accepted, with the sender shown as a plain address (not a person). "Sender not verified" appears only when the sender's domain fails SPF/DKIM/DMARC, which ordinary mail from Gmail, Proton and the like does not; the automated tests cover that case.
 - [ ] Check the Worker's logs for an `email auth:` line (step 5 above).
 - [ ] Send from an unregistered address to the planner address alone and check that nothing is stored.
 

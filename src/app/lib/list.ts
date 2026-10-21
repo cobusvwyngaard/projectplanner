@@ -1,5 +1,6 @@
 // The List view's tabs (SPEC 8: Mine / Theirs / Overdue / This week / Done,
-// plus Unassigned and Notes) and its label filter.
+// plus Unassigned and Notes) and its label filter, and the order of the
+// tasks in the tray.
 
 import { dueState, weekBounds } from "../../shared/dates";
 import type { Id, LocalDate, NoteView, TaskView } from "../../shared/types";
@@ -100,4 +101,14 @@ export function quickAddAssignee(tab: ListTab, ctx: Pick<ListContext, "me" | "ot
   if (tab === "mine") return ctx.me;
   if (tab === "theirs") return ctx.other;
   return null;
+}
+
+/**
+ * The tray's tasks: open tasks that are not on the board, earliest due first.
+ * Tasks from outside senders sit at the bottom, below all the others; each
+ * group keeps the order it had (SPEC section 5).
+ */
+export function trayTasks(tasks: Iterable<TaskView>): TaskView[] {
+  const rows = [...tasks].filter((t) => t.status === "open" && t.x === null).sort(byDue);
+  return [...rows.filter((t) => t.from_outside === null), ...rows.filter((t) => t.from_outside !== null)];
 }

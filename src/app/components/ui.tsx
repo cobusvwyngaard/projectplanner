@@ -6,7 +6,7 @@ import { actorLabel, sameActor } from "../../shared/actors";
 import { textColourFor } from "../../shared/colour";
 import { dueState } from "../../shared/dates";
 import { formatDateTime, formatDue, relativeTime } from "../../shared/format";
-import type { Id, Label, Provenance, User } from "../../shared/types";
+import type { FromOutside, Id, Label, Provenance, User } from "../../shared/types";
 import { useNow } from "../hooks";
 import { usePlanner } from "../store";
 
@@ -62,6 +62,15 @@ export function TimeAgo({ ts, now }: { ts: string; now?: Date }) {
     <time dateTime={ts} title={formatDateTime(ts)}>
       {relativeTime(ts, now ?? clock)}
     </time>
+  );
+}
+
+/** Why a task counts as coming from outside, said in red (SPEC section 5). */
+export function FromOutsideNote({ kind }: { kind: FromOutside }) {
+  return (
+    <span className="from-outside">
+      {kind === "unregistered" ? "From an unregistered email address" : "From an email whose sender is not verified"}
+    </span>
   );
 }
 

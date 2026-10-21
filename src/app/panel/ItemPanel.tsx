@@ -10,7 +10,7 @@ import { setArchived, setTaskDone, unplaceTask, updateNote, updateTask } from ".
 import { api, errorMessage } from "../api";
 import { EventEntry } from "../components/events";
 import { BackIcon, CloseIcon } from "../components/icons";
-import { ProvenanceLine, TimeAgo } from "../components/ui";
+import { FromOutsideNote, ProvenanceLine, TimeAgo } from "../components/ui";
 import { useIsPhone } from "../hooks";
 import type { DescribeContext } from "../lib/events";
 import { asNote, asTask, completionEvent, linksOf, liveTitle, parseItemKey, rebuildRow } from "../lib/items";
@@ -171,6 +171,7 @@ function TaskFields({ task, events, disabled }: { task: TaskView; events: readon
   const ticked = completionEvent(task, events);
   return (
     <div className="fields">
+      {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
       <label className="check-row">
         <input type="checkbox" checked={done} disabled={disabled} onChange={(e) => void setTaskDone(task.id, e.target.checked)} />
         <span>

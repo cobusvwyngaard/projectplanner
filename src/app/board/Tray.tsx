@@ -3,9 +3,9 @@
 
 import { useMemo } from "react";
 import { CloseIcon } from "../components/icons";
-import { AssigneeChip, DueChip, ItemLabel } from "../components/ui";
+import { AssigneeChip, DueChip, FromOutsideNote, ItemLabel } from "../components/ui";
 import { taskTitle } from "../lib/items";
-import { byDue } from "../lib/list";
+import { trayTasks } from "../lib/list";
 import { openItem } from "../router";
 import { usePlanner } from "../store";
 
@@ -15,7 +15,7 @@ export const TRAY_MIME = "application/x-planner-task";
 export function Tray({ onClose, onPlace }: { onClose: () => void; onPlace: (taskId: string) => void }) {
   const tasks = usePlanner((s) => s.tasks);
   const labels = usePlanner((s) => s.labels);
-  const unplaced = useMemo(() => [...tasks.values()].filter((t) => t.status === "open" && t.x === null).sort(byDue), [tasks]);
+  const unplaced = useMemo(() => trayTasks(tasks.values()), [tasks]);
   return (
     <aside className="tray" aria-labelledby="tray-heading">
       <header className="tray-header">
@@ -46,6 +46,7 @@ export function Tray({ onClose, onPlace }: { onClose: () => void; onPlace: (task
                 <button type="button" className="link-button tray-title" onClick={() => openItem({ type: "task", id: task.id })}>
                   {taskTitle(task)}
                 </button>
+                {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
                 <div className="card-meta">
                   <ItemLabel labelId={task.label_id} small />
                   <AssigneeChip userId={task.assignee_id} />

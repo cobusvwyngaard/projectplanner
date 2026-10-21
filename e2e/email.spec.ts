@@ -1,13 +1,16 @@
 // Email end to end (SPEC 11): a message cc'd to a registered address reaches
 // the Inbox with its body and attachment, a message no registered address
 // appears in is refused, and a redelivery of the same message changes nothing.
-// Wrangler's local email simulator delivers the raw message to the Worker's
-// email() handler. Every address and text here is made up.
+// A task that Claude makes from such a message is marked as coming from
+// outside, and sits last in the tray. Wrangler's local email simulator
+// delivers the raw message to the Worker's email() handler. Every address and
+// text here is made up.
 
 import { readFileSync } from "node:fs";
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
 import type { CapturesResponse } from "../src/shared/api";
-import { api, signIn, unique } from "./helpers";
+import type { Capture } from "../src/shared/types";
+import { McpClient, PERSON_1, api, connectClaude, signIn, unique } from "./helpers";
 
 /** Where `wrangler dev` accepts a message for the Worker's email() handler. */
 const EMAIL_HANDLER = "/cdn-cgi/handler/email";
@@ -64,11 +67,15 @@ function deliver(page: Page, envelope: { from: string; to: string }, message: st
   });
 }
 
+/** The stored capture with that subject, or null when none is stored. */
+async function newCapture(page: Page, subject: string): Promise<Capture | null> {
+  const response = await api<CapturesResponse>(page, "GET", "/api/captures?status=new&limit=30");
+  return response.captures.find((row) => row.email_subject === subject) ?? null;
+}
+
 /** How far the Worker has read the capture with that subject, or null when none is stored. */
 async function transcriptStatus(page: Page, subject: string): Promise<string | null> {
-  const response = await api<CapturesResponse>(page, "GET", "/api/captures?status=new&limit=30");
-  const capture = response.captures.find((row) => row.email_subject === subject);
-  return capture?.transcript_status ?? null;
+  return (await newCapture(page, subject))?.transcript_status ?? null;
 }
 
 test("an email cc'd to a registered address reaches the Inbox with its attachment", async ({ page }) => {
@@ -145,6 +152,106 @@ test("an email cc'd to a registered address reaches the Inbox with its attachmen
   await page.goto("/settings");
   const row = page.getByRole("listitem").filter({ hasText: address });
   await row.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("group", { name: `Remove ${address}?` }).getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByText(address)).toHaveCount(0);
+});
+
+test("a task made from an outside email is marked and sits last in the tray", async ({ page, baseURL }) => {
+  test.setTimeout(180_000);
+  if (!baseURL) throw new Error("The smoke tests need a baseURL.");
+
+  await signIn(page, 1);
+
+  // Settings › People: register an address for Person 1, so the message below
+  // is accepted (SPEC 11.2) even though the sender is a stranger.
+  const address = `${unique("person1").replace(/\s+/g, "-").toLowerCase()}@example.com`;
+  await page.goto("/settings");
+  const field = page.getByLabel("Add an email address").first();
+  await field.fill(address);
+  await page.getByRole("button", { name: "Add", exact: true }).first().click();
+  await expect(page.getByText(address)).toBeVisible();
+
+  // A stranger writes to the planner and cc's that address.
+  const subject = unique("Marquee for the weekend");
+  const message = rawMessage({
+    from: OUTSIDER,
+    to: PLANNER,
+    cc: address,
+    subject,
+    messageId: `<${unique("marquee").replace(/\s+/g, "-")}@example.org>`,
+  });
+  expect((await deliver(page, { from: OUTSIDER, to: PLANNER }, message)).status()).toBe(200);
+  await expect.poll(() => transcriptStatus(page, subject), { timeout: 30_000 }).toBe("done");
+
+  const capture = await newCapture(page, subject);
+  if (!capture) throw new Error("The email did not become a capture.");
+
+  // Claude turns the email into two tasks, as it would after start_run: one
+  // from the email and one from nothing. The outside title sorts before the
+  // other, so only the flag can put it last.
+  const token = await connectClaude(page, baseURL, unique("Claude Desktop"));
+  const mcp = new McpClient(baseURL, token.accessToken);
+  await mcp.start();
+  const started = await mcp.callTool<{ run_id: string }>("start_run", {
+    intent: unique("Plan the weekend from the email"),
+    capture_ids: [capture.id],
+  });
+  expect(started.isError).toBe(false);
+  const runId = started.json?.run_id;
+  if (!runId) throw new Error("start_run did not return a run id.");
+
+  const outsideTitle = unique("Aardvark reply about the marquee");
+  const outside = await mcp.callTool<{ id: string }>("create_task", {
+    run_id: runId,
+    title: outsideTitle,
+    assignee_id: PERSON_1,
+    source_capture_ids: [capture.id],
+  });
+  expect(outside.isError).toBe(false);
+
+  const normalTitle = unique("Zebra sort the boxes");
+  const normal = await mcp.callTool<{ id: string }>("create_task", {
+    run_id: runId,
+    title: normalTitle,
+    assignee_id: PERSON_1,
+    source_capture_ids: [],
+  });
+  expect(normal.isError).toBe(false);
+
+  const finished = await mcp.callTool("finish_run", { run_id: runId, summary: unique("Made two tasks from the email.") });
+  expect(finished.isError).toBe(false);
+
+  // Board: both tasks are in the tray; the outside one is last, in red, with
+  // the words that say why.
+  await page.goto("/board");
+  const trayItem = page.locator(".tray-item").filter({ hasText: outsideTitle });
+  await expect(trayItem).toBeVisible();
+  const note = trayItem.locator(".from-outside");
+  await expect(note).toHaveText("From an unregistered email address");
+  await expect(note).toHaveCSS("color", "rgb(138, 34, 22)");
+
+  const titles = await page.locator(".tray-item .tray-title").allInnerTexts();
+  expect(titles).toContain(normalTitle);
+  expect(titles.indexOf(outsideTitle)).toBeGreaterThan(titles.indexOf(normalTitle));
+  expect(titles.at(-1)).toBe(outsideTitle);
+  // The ordinary task carries no note.
+  await expect(page.locator(".tray-item").filter({ hasText: normalTitle }).locator(".from-outside")).toHaveCount(0);
+
+  // The mark is readable in the dark theme too.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(note).toHaveCSS("color", "rgb(245, 184, 174)");
+  await page.emulateMedia({ colorScheme: "light" });
+
+  // List view: the same words on the row, and none on the ordinary task.
+  await page.goto("/list");
+  const row = page.locator(".row").filter({ hasText: outsideTitle });
+  await expect(row.getByText("From an unregistered email address")).toBeVisible();
+  await expect(page.locator(".row").filter({ hasText: normalTitle }).locator(".from-outside")).toHaveCount(0);
+
+  // Leave the address as it was found.
+  await page.goto("/settings");
+  const emailRow = page.getByRole("listitem").filter({ hasText: address });
+  await emailRow.getByRole("button", { name: "Remove", exact: true }).click();
   await page.getByRole("group", { name: `Remove ${address}?` }).getByRole("button", { name: "Remove" }).click();
   await expect(page.getByText(address)).toHaveCount(0);
 });

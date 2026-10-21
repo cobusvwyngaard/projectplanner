@@ -41,6 +41,18 @@ Details (proposed; owner decisions marked):
   another) versus a plain link, and get_board returns the kind and
   direction. Reverting and history work for the new links as for the old.
 
+**Done on the Worker and Claude side** in `a0fb3e5` and `992c8ba`: every link
+now carries a direction (`none`, `a_to_b`, `b_to_a`), a dependency is only
+allowed between two tasks, a dependency that would make a circle of tasks
+waiting for each other is refused, and ticking a task off while it still
+waits for a task that is not done yet warns instead of being refused. The
+API takes `depends` on `POST /api/links` and `PATCH /api/links/:id`, and
+Claude's `link_items` takes a `kind`, `get_board` returns the kind and
+which end comes first, and `update_task` returns the warning. What is left
+is the app: the arrow on the board, the words in the List view and the item
+panel, and the way to reverse a dependency or turn it back into a plain
+connection.
+
 ## Done
 
 ### 1. Tasks from outside senders must stand out in "Not on the board"

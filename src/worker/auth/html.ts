@@ -81,8 +81,6 @@ export function renderPage(title: string, body: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>${escapeHtml(title)}</title>
 <style>${STYLE}</style>
 </head>

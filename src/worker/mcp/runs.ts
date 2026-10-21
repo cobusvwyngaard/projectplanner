@@ -16,6 +16,11 @@ export interface ToolContext {
   now: Date;
 }
 
+/** A capture is ready to claim when it is typed text or its transcript is done (SPEC 7). */
+export function captureReady(capture: { kind: string; transcript_status: string }): boolean {
+  return capture.kind === "text" || capture.transcript_status === "done";
+}
+
 /** A run that exists, belongs to `userId`, is unfinished and is under 2 hours old. */
 export async function getOpenRun(
   db: D1Database,
@@ -65,8 +70,7 @@ export async function startRun(
   const bad: string[] = [];
   for (const id of ids) {
     const c = byId.get(id);
-    const ready = c !== undefined && (c.kind === "text" || c.transcript_status === "done");
-    if (!c || c.inbox_status !== "new" || !ready) bad.push(id);
+    if (!c || c.inbox_status !== "new" || !captureReady(c)) bad.push(id);
   }
   if (bad.length > 0) {
     throw new ValidationError(`These captures cannot be claimed: ${bad.join(", ")}.`, { ids: bad });

@@ -15,6 +15,7 @@ import { claudeActor } from "../../mutate/actor";
 import { findLink, mutate, mutateMany, type Mutation } from "../../mutate/index";
 import { ulid } from "../../lib/ulid";
 import { iso } from "../../lib/time";
+import { parseEmailParticipants } from "./read";
 import type { ToolContext } from "../runs";
 
 const DATE_ERROR = "A date must be a real date written as YYYY-MM-DD.";
@@ -46,6 +47,31 @@ async function checkSourceCaptures(db: D1Database, ids: readonly string[]): Prom
 async function requireOpen<K extends "note" | "task">(db: D1Database, type: K, id: string): Promise<void> {
   const row = await getRow(db, type, id);
   if (!row || row.archived_at !== null) throw new NotFoundError(`No open ${type} with id ${id}.`);
+}
+
+const NOT_ON_EMAIL = "That person is not on the source email; leave the task unassigned.";
+
+/**
+ * When every source capture is an email and someone is being assigned, the
+ * assignee must be a participant of at least one of those emails (SPEC 11.4).
+ * The email's text cannot steer a task to a person who was not on the message.
+ */
+async function checkEmailAssignee(
+  db: D1Database,
+  assigneeId: string | null,
+  sourceIds: readonly string[],
+): Promise<void> {
+  if (assigneeId === null || sourceIds.length === 0) return;
+  const marks = sourceIds.map(() => "?").join(", ");
+  const { results } = await db
+    .prepare(`SELECT kind, email_participants_json FROM captures WHERE id IN (${marks})`)
+    .bind(...sourceIds)
+    .all<{ kind: string; email_participants_json: string | null }>();
+  if (results.some((c) => c.kind !== "email")) return;
+  const onSomeEmail = results.some((c) =>
+    parseEmailParticipants(c.email_participants_json).some((p) => p.user_id === assigneeId),
+  );
+  if (!onSomeEmail) throw new ValidationError(NOT_ON_EMAIL);
 }
 
 export async function createNote(
@@ -122,6 +148,7 @@ export async function createTask(
     throw new ValidationError(DATE_ERROR, { field: "due_date" });
   }
   await checkSourceCaptures(db, input.source_capture_ids);
+  await checkEmailAssignee(db, input.assignee_id ?? null, input.source_capture_ids);
   const labelId = input.label_id === undefined ? await defaultLabelId(db) : (input.label_id ?? null);
   const links = input.link_to ?? [];
   for (const ref of links) await requireOpen(db, ref.type, ref.id);
@@ -188,6 +215,7 @@ export async function updateTask(
     throw new ValidationError(DATE_ERROR, { field: "due_date" });
   }
   await checkSourceCaptures(db, input.source_capture_ids);
+  await checkEmailAssignee(db, input.patch.assignee_id ?? null, input.source_capture_ids);
   const result = await mutate(
     db,
     claudeActor(userId, input.run_id),

@@ -5,6 +5,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { BootstrapResponse } from "../../src/shared/api";
 import { ulid } from "../../src/worker/lib/ulid";
+import { SYSTEM_ACTOR } from "../../src/worker/mutate/actor";
+import { mutate } from "../../src/worker/mutate/index";
 import { asUser, ok } from "../helpers/api";
 import { PHRASE_1, PHRASE_2 } from "../helpers/auth";
 import { USER_1, USER_2, allEvents, freshDb } from "../helpers/db";
@@ -46,6 +48,60 @@ async function newCapture(text: string, author: string = USER_1): Promise<string
     .bind(id, author, text, new Date().toISOString())
     .run();
   return id;
+}
+
+const USER_3 = "00000000000000000000000003";
+
+/** A third registered person; the planner has no sign-up, so the row is made directly. */
+async function addUser(id: string, displayName: string): Promise<void> {
+  await db
+    .prepare(`INSERT INTO users (id, email, display_name, initials, created_at) VALUES (?, NULL, ?, ?, ?)`)
+    .bind(id, displayName, displayName.slice(0, 2).toUpperCase(), "2026-10-01T00:00:00.000Z")
+    .run();
+}
+
+/** A registered address for a person (SPEC 11.2). */
+async function registerEmail(userId: string, address: string): Promise<void> {
+  await db
+    .prepare(`INSERT INTO user_emails (id, user_id, address, created_at, archived_at) VALUES (?, ?, ?, ?, NULL)`)
+    .bind(`email-${address}`, userId, address, "2026-10-01T00:00:00.000Z")
+    .run();
+}
+
+/**
+ * An email capture the pipeline already read, made through mutate as the
+ * system actor: three registered people exist, but the email only involves
+ * the first two (Person 2 in Cc, plus an unregistered guest in To).
+ */
+async function newEmailCapture(): Promise<string> {
+  const id = ulid(Date.now());
+  const participants = [
+    { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+    { address: "guest@example.org", name: "Guest", role: "to", user_id: null },
+    { address: "two@example.com", name: "Person 2", role: "cc", user_id: USER_2 },
+  ];
+  const { row } = await mutate(db, SYSTEM_ACTOR, {
+    entity: "capture",
+    action: "create",
+    id,
+    values: {
+      kind: "email",
+      author_user_id: USER_1,
+      r2_key: `emails/2026/10/${id}.eml`,
+      mime: "message/rfc822",
+      text: "Please book the cottage for the weekend, Person 2.",
+      transcript_status: "done",
+      inbox_status: "new",
+      email_subject: "Cottage for the weekend",
+      email_from: "one@example.com",
+      email_to_json: JSON.stringify(["guest@example.org"]),
+      email_cc_json: JSON.stringify(["two@example.com"]),
+      email_participants_json: JSON.stringify(participants),
+      email_message_id: `<${id}@example.com>`,
+      email_sender_verified: 1,
+    },
+  });
+  return String(row.id);
 }
 
 /** Signed-in events (the login itself) are not writes to the board. */
@@ -168,6 +224,77 @@ describe("which person a write belongs to", () => {
     const bootstrap = await ok<BootstrapResponse>(asUser(USER_1).get("/api/bootstrap"));
     expect(bootstrap.notes[0]?.prov?.created_by).toEqual({ kind: "claude", user_id: USER_2 });
     expect(bootstrap.me.id).toBe(USER_1);
+  });
+});
+
+describe("an email capture and who may be assigned from it", () => {
+  it("tasks a participant in Cc, and refuses a person who was not on the email", async () => {
+    // Three registered people; the email only involves the first two.
+    await addUser(USER_3, "Person 3");
+    await registerEmail(USER_1, "one@example.com");
+    await registerEmail(USER_2, "two@example.com");
+    await registerEmail(USER_3, "three@example.com");
+    const email = await newEmailCapture();
+    const mcp = await session(PHRASE_1);
+
+    const inbox = (await mcp.callTool("get_inbox", {})).json as {
+      items: {
+        id: string;
+        ready: boolean;
+        email?: { subject: string; sender_verified: boolean; participants: { user_id: string | null }[] };
+      }[];
+    };
+    expect(inbox.items.map((i) => i.id)).toEqual([email]);
+    expect(inbox.items[0]?.ready).toBe(true);
+    expect(inbox.items[0]?.email).toMatchObject({ subject: "Cottage for the weekend", sender_verified: true });
+    expect(inbox.items[0]?.email?.participants.map((p) => p.user_id)).toEqual([USER_1, null, USER_2]);
+
+    const started = (await mcp.callTool("start_run", {
+      intent: "Turn the email into a task",
+      capture_ids: [email],
+    })).json as { run_id: string };
+    const task = (await mcp.callTool("create_task", {
+      run_id: started.run_id,
+      title: "Book the cottage",
+      detail: "The email asks Person 2 to book it.",
+      assignee_id: USER_2,
+      source_capture_ids: [email],
+    })).json as { id: string };
+    const assigned = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task.id).first();
+    expect(assigned).toMatchObject({ assignee_id: USER_2 });
+
+    // Person 3 is a registered planner person but was not on the email (SPEC 11.4).
+    const refused = await mcp.callTool("update_task", {
+      run_id: started.run_id,
+      id: task.id,
+      patch: { assignee_id: USER_3 },
+      source_capture_ids: [email],
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("That person is not on the source email; leave the task unassigned.");
+    const stillTwo = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task.id).first();
+    expect(stillTwo).toMatchObject({ assignee_id: USER_2 });
+
+    await mcp.callTool("mark_captures", {
+      run_id: started.run_id,
+      capture_ids: [email],
+      status: "processed",
+      note: "Turned into a task for Person 2",
+      source_capture_ids: [email],
+    });
+    const finished = (await mcp.callTool("finish_run", {
+      run_id: started.run_id,
+      summary: "One task, assigned from the email.",
+    })).json as { released: string[] };
+    expect(finished.released).toEqual([]);
+
+    // Provenance and the task's own event point back at the email (SPEC section 5).
+    const bootstrap = await ok<BootstrapResponse>(asUser(USER_1).get("/api/bootstrap"));
+    const taskView = bootstrap.tasks.find((t) => t.id === task.id);
+    expect(taskView?.prov?.created_by).toEqual({ kind: "claude", user_id: USER_1 });
+    const writes = (await boardEvents()).filter((e) => e.entity_type === "task" && e.entity_id === task.id);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ actor_kind: "claude", run_id: started.run_id, source_capture_ids: [email] });
   });
 });
 

@@ -1,13 +1,13 @@
 // Read tools for the Claude connector (SPEC section 7). Plain functions over
 // ToolContext, so they are testable without MCP; agent.ts registers them.
 
-import type { Capture, User } from "../../../shared/types";
+import type { Capture, CaptureAttachment, EmailParticipant, User } from "../../../shared/types";
 import { localToday } from "../../../shared/dates";
 import { NotFoundError } from "../../lib/errors";
 import { ENTITIES } from "../../mutate/entities";
-import { activeLabels, activeLinks, getRow, listUsers, openNotes, openTasks } from "../../board/queries";
+import { attachmentsForCaptures, activeLabels, activeLinks, getRow, listUsers, openNotes, openTasks } from "../../board/queries";
 import { itemHistory } from "../../board/activity";
-import type { ToolContext } from "../runs";
+import { captureReady, type ToolContext } from "../runs";
 
 /** Board text Claude reads is cut to this many characters. */
 export const BOARD_TEXT_LIMIT = 2000;
@@ -65,37 +65,119 @@ export async function getOverview(ctx: ToolContext): Promise<{
   };
 }
 
+/** One person of an email, as Claude sees them (SPEC 11.4). */
+export interface InboxParticipant {
+  address: string;
+  name: string;
+  role: "from" | "to" | "cc";
+  /** The planner person this address belongs to, or null when it maps to nobody */
+  user_id: string | null;
+  /** That person's name from the users list, or null when there is no person */
+  display_name: string | null;
+}
+
+/** One attachment of an email, listed even when its content was not stored. */
+export interface InboxAttachment {
+  name: string;
+  mime: string;
+  size_bytes: number;
+  /** True when the content is stored; a too-large attachment is listed without it */
+  stored: boolean;
+}
+
 export interface InboxItem {
   id: string;
   kind: string;
-  author: { id: string; display_name: string };
+  /** True when the capture may be claimed: typed text or a finished transcript */
+  ready: boolean;
+  /** Null for an email capture whose sender was not verified (SPEC 11.2) */
+  author: { id: string; display_name: string } | null;
   created_at: string;
   duration_s: number | null;
   text: string | null;
   text_truncated: boolean;
+  /** Present for kind 'email' only (SPEC 11.4) */
+  email?: {
+    subject: string | null;
+    sender_verified: boolean;
+    from: InboxParticipant | null;
+    participants: InboxParticipant[];
+    attachments: InboxAttachment[];
+  };
+}
+
+function isParticipant(value: unknown): value is EmailParticipant {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.address === "string" &&
+    typeof row.name === "string" &&
+    (row.role === "from" || row.role === "to" || row.role === "cc") &&
+    (typeof row.user_id === "string" || row.user_id === null)
+  );
+}
+
+/** The people stored on an email capture; anything unreadable counts as nobody. */
+export function parseEmailParticipants(json: string | null): EmailParticipant[] {
+  if (json === null) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(isParticipant);
 }
 
 /**
  * One inbox item as Claude sees it. The single builder for capture listings,
- * so phase 4 adds the email fields (subject, sender, participants) here.
+ * so every tool that lists captures shows the same email fields (SPEC 11.4).
  */
-export function inboxItem(capture: Capture, users: readonly User[]): InboxItem {
-  const author = users.find((u) => u.id === capture.author_user_id);
+export function inboxItem(
+  capture: Capture,
+  users: readonly User[],
+  attachments: readonly CaptureAttachment[] = [],
+): InboxItem {
   const raw = capture.text;
   const truncated = raw !== null && raw.length > INBOX_TEXT_LIMIT;
-  return {
+  const authorId = capture.author_user_id;
+  const author = authorId === null ? undefined : users.find((u) => u.id === authorId);
+  const item: InboxItem = {
     id: capture.id,
     kind: capture.kind,
-    // An email capture from an unverified sender has no author (SPEC 11.2).
-    author: {
-      id: capture.author_user_id ?? "email",
-      display_name: author?.display_name ?? "Email",
-    },
+    ready: captureReady(capture),
+    // An email capture from an unverified sender has no author (SPEC 11.2):
+    // its From address may be forged, so no id is made up for it.
+    author: authorId !== null && author !== undefined ? { id: authorId, display_name: author.display_name } : null,
     created_at: capture.created_at,
     duration_s: capture.duration_s,
     text: raw === null ? null : truncated ? raw.slice(0, INBOX_TEXT_LIMIT) : raw,
     text_truncated: truncated,
   };
+  if (capture.kind === "email") {
+    const names = new Map(users.map((u) => [u.id, u.display_name]));
+    const participants: InboxParticipant[] = parseEmailParticipants(capture.email_participants_json).map((p) => ({
+      address: p.address,
+      name: p.name,
+      role: p.role,
+      user_id: p.user_id,
+      display_name: p.user_id === null ? null : (names.get(p.user_id) ?? null),
+    }));
+    item.email = {
+      subject: capture.email_subject,
+      sender_verified: capture.email_sender_verified === 1,
+      from: participants.find((p) => p.role === "from") ?? null,
+      participants,
+      attachments: attachments.map((a) => ({
+        name: a.filename,
+        mime: a.mime,
+        size_bytes: a.size_bytes,
+        stored: a.r2_key !== null,
+      })),
+    };
+  }
+  return item;
 }
 
 export interface BoardFilters {
@@ -190,10 +272,19 @@ export async function getInbox(
   const ready: Capture[] = [];
   let notReady = 0;
   for (const c of results) {
-    if (c.kind === "text" || c.transcript_status === "done") ready.push(c);
+    if (captureReady(c)) ready.push(c);
     else notReady++;
   }
-  return { items: ready.slice(0, limit).map((c) => inboxItem(c, users)), not_ready: notReady };
+  const listed = ready.slice(0, limit);
+  const emailIds = listed.filter((c) => c.kind === "email").map((c) => c.id);
+  // One query for every listed email's attachments, never one per capture.
+  const byCapture = new Map<string, CaptureAttachment[]>();
+  for (const a of await attachmentsForCaptures(db, emailIds)) {
+    const list = byCapture.get(a.capture_id);
+    if (list === undefined) byCapture.set(a.capture_id, [a]);
+    else list.push(a);
+  }
+  return { items: listed.map((c) => inboxItem(c, users, byCapture.get(c.id) ?? [])), not_ready: notReady };
 }
 
 export async function getHistory(

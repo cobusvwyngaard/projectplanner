@@ -4,12 +4,14 @@
 
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { EmailParticipant } from "../../src/shared/types";
 import type { RevertResponse } from "../../src/shared/api";
 import { runScheduled } from "../../src/worker/cron";
 import { ConflictError, NotFoundError, RunNotOpenError, ValidationError } from "../../src/worker/lib/errors";
 import { ulid } from "../../src/worker/lib/ulid";
 import { finishRun, getOpenRun, startRun, type ToolContext } from "../../src/worker/mcp/runs";
-import { getBoard, getHistory, getInbox, getOverview } from "../../src/worker/mcp/tools/read";
+import { getRow, listUsers } from "../../src/worker/board/queries";
+import { getBoard, getHistory, getInbox, getOverview, inboxItem, type InboxItem } from "../../src/worker/mcp/tools/read";
 import {
   createNote,
   createTask,
@@ -87,6 +89,82 @@ async function claimRows(captureIds: string[], runId: string, at: Date = now): P
         .bind(runId, at.toISOString(), id),
     ),
   );
+}
+
+interface EmailOptions {
+  author?: string | null;
+  subject?: string;
+  senderVerified?: boolean;
+  participants?: EmailParticipant[];
+  text?: string;
+  transcript?: "pending" | "done";
+  createdAt?: Date;
+}
+
+/** An email capture in the inbox, as the email pipeline leaves it once read. */
+async function newEmailCapture(options: EmailOptions = {}): Promise<string> {
+  const at = options.createdAt ?? now;
+  const id = ulid(at.getTime());
+  const participants: EmailParticipant[] = options.participants ?? [
+    { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+    { address: "two@example.com", name: "Person 2", role: "to", user_id: USER_2 },
+  ];
+  const roleAddresses = (role: EmailParticipant["role"]): string[] =>
+    participants.filter((p) => p.role === role).map((p) => p.address);
+  await db
+    .prepare(
+      `INSERT INTO captures (id, kind, author_user_id, text, transcript_status, inbox_status, created_at,
+         email_subject, email_from, email_to_json, email_cc_json, email_participants_json,
+         email_message_id, email_sender_verified)
+       VALUES (?, 'email', ?, ?, ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      id,
+      options.author === undefined ? USER_1 : options.author,
+      options.text ?? "Please book the flights.",
+      options.transcript ?? "done",
+      at.toISOString(),
+      options.subject ?? "Flights for the trip",
+      participants.find((p) => p.role === "from")?.address ?? "nobody@example.org",
+      JSON.stringify(roleAddresses("to")),
+      JSON.stringify(roleAddresses("cc")),
+      JSON.stringify(participants),
+      `<${id}@example.com>`,
+      options.senderVerified === false ? 0 : 1,
+    )
+    .run();
+  return id;
+}
+
+/** An attachment row on an email capture; stored false means no content in R2. */
+async function newAttachment(
+  captureId: string,
+  filename: string,
+  options: { size?: number; stored?: boolean } = {},
+): Promise<void> {
+  const stored = options.stored !== false;
+  await db
+    .prepare(
+      `INSERT INTO capture_attachments (id, capture_id, filename, mime, size_bytes, r2_key, too_large, created_at)
+       VALUES (?, ?, ?, 'application/pdf', ?, ?, ?, ?)`,
+    )
+    .bind(
+      `att-${captureId}-${filename}`,
+      captureId,
+      filename,
+      options.size ?? 512,
+      stored ? `attachments/${captureId}/${filename}` : null,
+      stored ? 0 : 1,
+      now.toISOString(),
+    )
+    .run();
+}
+
+/** One stored capture as Claude's inboxItem sees it. */
+async function itemFor(id: string): Promise<InboxItem> {
+  const row = await getRow(db, "capture", id);
+  if (row === null) throw new Error(`capture ${id} is missing`);
+  return inboxItem(row, await listUsers(db));
 }
 
 const count = async (table: string): Promise<number> =>
@@ -238,6 +316,82 @@ describe("get_inbox", () => {
     const item = withLong.items.find((i) => i.id === long);
     expect(item?.text).toHaveLength(10_000);
     expect(item?.text_truncated).toBe(true);
+  });
+
+  it("marks an item ready for text and a finished transcript, not while one is pending", async () => {
+    const text = await newCapture("Typed thought");
+    const done = await newCapture("Said out loud", { kind: "voice", transcript: "done" });
+    const pending = await newCapture("Still transcribing", { kind: "voice", transcript: "pending" });
+
+    expect((await itemFor(text)).ready).toBe(true);
+    expect((await itemFor(done)).ready).toBe(true);
+    expect((await itemFor(pending)).ready).toBe(false);
+
+    // get_inbox lists the ready ones, the same rule start_run claims by.
+    const inbox = await getInbox(ctx(), {});
+    expect(inbox.items.map((i) => i.id).sort()).toEqual([text, done].sort());
+    expect(inbox.not_ready).toBe(1);
+  });
+
+  it("has no author for an email whose sender was not verified", async () => {
+    const capture = await newEmailCapture({
+      author: null,
+      senderVerified: false,
+      participants: [{ address: "stranger@example.org", name: "", role: "from", user_id: null }],
+    });
+
+    const item = await itemFor(capture);
+    expect(item.author).toBeNull();
+    expect(item.email?.sender_verified).toBe(false);
+  });
+
+  it("shows an email's subject, sender and every participant, mapped to a planner person or not", async () => {
+    const capture = await newEmailCapture({
+      subject: "Cottage for the weekend",
+      senderVerified: true,
+      participants: [
+        { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+        { address: "two@example.com", name: "Person 2", role: "to", user_id: USER_2 },
+        { address: "guest@example.org", name: "Guest", role: "cc", user_id: null },
+      ],
+    });
+
+    const item = await itemFor(capture);
+    expect(item.email).toMatchObject({
+      subject: "Cottage for the weekend",
+      sender_verified: true,
+      from: { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1, display_name: "Person 1" },
+      attachments: [],
+    });
+    expect(item.email?.participants).toEqual([
+      { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1, display_name: "Person 1" },
+      { address: "two@example.com", name: "Person 2", role: "to", user_id: USER_2, display_name: "Person 2" },
+      { address: "guest@example.org", name: "Guest", role: "cc", user_id: null, display_name: null },
+    ]);
+    // Other kinds carry no email block at all.
+    expect((await itemFor(await newCapture())).email).toBeUndefined();
+  });
+
+  it("lists every attachment of every listed email, stored or not, in one query", async () => {
+    const first = await newEmailCapture({ subject: "First" });
+    const second = await newEmailCapture({ subject: "Second" });
+    await newAttachment(first, "plan.pdf", { size: 2048 });
+    await newAttachment(first, "huge.zip", { stored: false });
+    await newAttachment(second, "notes.txt", { size: 12 });
+
+    const inbox = await getInbox(ctx(), {});
+    const items = new Map(inbox.items.map((i) => [i.id, i]));
+    expect(items.get(first)?.email?.attachments).toEqual([
+      { name: "huge.zip", mime: "application/pdf", size_bytes: 512, stored: false },
+      { name: "plan.pdf", mime: "application/pdf", size_bytes: 2048, stored: true },
+    ]);
+    expect(items.get(second)?.email?.attachments).toEqual([
+      { name: "notes.txt", mime: "application/pdf", size_bytes: 12, stored: true },
+    ]);
+    // Counting rows, not spying on SQL: the listing carries every attachment
+    // row of both captures, which one query over all the ids returns.
+    const listed = inbox.items.flatMap((i) => i.email?.attachments ?? []);
+    expect(listed).toHaveLength(await count("capture_attachments"));
   });
 });
 
@@ -701,6 +855,132 @@ describe("update_task", () => {
     await expect(
       updateTask(ctx(), { run_id: run, id: task, patch: { title: "x" }, source_capture_ids: [] }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("assigning tasks whose sources are emails (SPEC 11.4)", () => {
+  const PARTICIPANTS: EmailParticipant[] = [
+    { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+    { address: "two@example.com", name: "Person 2", role: "cc", user_id: USER_2 },
+  ];
+  const WITHOUT_TWO: EmailParticipant[] = [
+    { address: "one@example.com", name: "Person 1", role: "from", user_id: USER_1 },
+    { address: "guest@example.org", name: "Guest", role: "to", user_id: null },
+  ];
+
+  it("allows an assignee who is a participant of the source email", async () => {
+    const email = await newEmailCapture({ participants: PARTICIPANTS });
+    const task = await newTask();
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    const created = await createTask(ctx(), {
+      run_id: run,
+      title: "Book the cottage",
+      assignee_id: USER_2,
+      source_capture_ids: [email],
+    });
+    const createdRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(created.id).first();
+    expect(createdRow).toMatchObject({ assignee_id: USER_2 });
+
+    await updateTask(ctx(), {
+      run_id: run,
+      id: task,
+      patch: { assignee_id: USER_2 },
+      source_capture_ids: [email],
+    });
+    const updatedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task).first();
+    expect(updatedRow).toMatchObject({ assignee_id: USER_2 });
+  });
+
+  it("refuses an assignee who is not on the source email, and writes nothing", async () => {
+    const email = await newEmailCapture({ participants: WITHOUT_TWO });
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    const call = createTask(ctx(), {
+      run_id: run,
+      title: "Book the cottage",
+      assignee_id: USER_2,
+      source_capture_ids: [email],
+    });
+    await expect(call).rejects.toBeInstanceOf(ValidationError);
+    await expect(call).rejects.toThrow("That person is not on the source email; leave the task unassigned.");
+    expect(await count("tasks")).toBe(0);
+    expect(await count("events")).toBe(0);
+  });
+
+  it("refuses the same on update_task, leaving the task and its history untouched", async () => {
+    const email = await newEmailCapture({ participants: WITHOUT_TWO });
+    const task = await newTask();
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+    const eventsBefore = await count("events");
+
+    await expect(
+      updateTask(ctx(), { run_id: run, id: task, patch: { assignee_id: USER_2 }, source_capture_ids: [email] }),
+    ).rejects.toThrow("That person is not on the source email; leave the task unassigned.");
+    const row = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task).first();
+    expect(row).toMatchObject({ assignee_id: null });
+    expect(await count("events")).toBe(eventsBefore);
+  });
+
+  it("leaves writes alone when the sources are mixed, absent, or nobody is assigned", async () => {
+    const email = await newEmailCapture({ participants: WITHOUT_TWO });
+    const text = await newCapture("A typed thought");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    // Mixed sources are not held to the participant rule.
+    const mixed = await createTask(ctx(), {
+      run_id: run,
+      title: "Mixed sources",
+      assignee_id: USER_2,
+      source_capture_ids: [email, text],
+    });
+    const mixedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(mixed.id).first();
+    expect(mixedRow).toMatchObject({ assignee_id: USER_2 });
+
+    // No email sources at all: unchanged.
+    const plain = await createTask(ctx(), {
+      run_id: run,
+      title: "No email involved",
+      assignee_id: USER_2,
+      source_capture_ids: [text],
+    });
+    const plainRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(plain.id).first();
+    expect(plainRow).toMatchObject({ assignee_id: USER_2 });
+
+    // All-email sources but nobody assigned: fine.
+    const unassigned = await createTask(ctx(), {
+      run_id: run,
+      title: "Nobody yet",
+      source_capture_ids: [email],
+    });
+    const unassignedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(unassigned.id).first();
+    expect(unassignedRow).toMatchObject({ assignee_id: null });
+
+    // Clearing an assignee from an email-only write is allowed too.
+    const task = await newTask();
+    await updateTask(ctx(), {
+      run_id: run,
+      id: task,
+      patch: { assignee_id: null },
+      source_capture_ids: [email],
+    });
+    const clearedRow = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(task).first();
+    expect(clearedRow).toMatchObject({ assignee_id: null });
+  });
+
+  it("allows the assignee when only one of several email sources has them on it", async () => {
+    const withTwo = await newEmailCapture({ participants: PARTICIPANTS });
+    const withoutTwo = await newEmailCapture({ participants: WITHOUT_TWO });
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    const created = await createTask(ctx(), {
+      run_id: run,
+      title: "Asked of Person 2 in one email",
+      assignee_id: USER_2,
+      source_capture_ids: [withoutTwo, withTwo],
+    });
+    const row = await db.prepare(`SELECT assignee_id FROM tasks WHERE id = ?`).bind(created.id).first();
+    expect(row).toMatchObject({ assignee_id: USER_2 });
   });
 });
 

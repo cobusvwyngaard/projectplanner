@@ -811,6 +811,15 @@ textarea {
   color: var(--muted);
 }
 
+/* A task whose source capture was an email sent from outside the planner
+   (SPEC section 5). The colour works in both the light and the dark theme. */
+.from-outside {
+  color: var(--danger-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .swatch {
   display: inline-block;
   width: 12px;

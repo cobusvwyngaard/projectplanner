@@ -89,8 +89,9 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
           `unassigned (true for tasks with nobody), status ('open' or 'done'), due_from and due_to ` +
           `(YYYY-MM-DD, inclusive) and include_done (add done tasks to the open ones). Returns ` +
           `notes {id, title, body cut at 2000 characters, label_id}, ` +
-          `tasks {id, title, detail cut at 2000, label_id, assignee_id, due_date, status} and ` +
-          `links {a {type,id}, b {type,id}} only between items that are returned. Done tasks are left ` +
+          `tasks {id, title, detail cut at 2000, label_id, assignee_id, due_date, status, from_outside} and ` +
+          `links {a {type,id}, b {type,id}} only between items that are returned. from_outside is ` +
+          `'unregistered' or 'unverified' when the task came from an email sent from outside, else null. Done tasks are left ` +
           `out unless include_done or status 'done'. Caps: 200 notes and 300 tasks, newest first; ` +
           `truncated is true when more existed. Use it before writing, to update or link what already ` +
           `exists rather than create duplicates. ${DATA_WARNING}`,

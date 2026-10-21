@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIST_TABS, notesForList, quickAddAssignee, tabCounts, tasksForTab, type ListContext } from "../../src/app/lib/list";
+import { LIST_TABS, notesForList, quickAddAssignee, tabCounts, tasksForTab, trayTasks, type ListContext } from "../../src/app/lib/list";
 import { ME, OTHER, note, task } from "./app-fixtures";
 
 // Wednesday 14 Oct 2026; the week runs from Monday 12 to Sunday 18 Oct.
@@ -77,5 +77,31 @@ describe("quickAddAssignee", () => {
     expect(quickAddAssignee("mine", ctx)).toBe(ME.id);
     expect(quickAddAssignee("theirs", ctx)).toBe(OTHER.id);
     expect(quickAddAssignee("week", ctx)).toBeNull();
+  });
+});
+
+describe("trayTasks", () => {
+  const tray = [
+    task({ id: "undated" }),
+    task({ id: "late", due_date: "2026-10-10" }),
+    task({ id: "early", due_date: "2026-10-01" }),
+    task({ id: "outside-late", due_date: "2026-10-09", from_outside: "unregistered" }),
+    task({ id: "outside-early", due_date: "2026-10-02", from_outside: "unverified" }),
+    task({ id: "placed", due_date: "2026-10-03", x: 10, y: 10 }),
+    task({ id: "done", status: "done", due_date: "2026-10-04" }),
+  ];
+
+  it("holds the open tasks that are not on the board, earliest due first", () => {
+    expect(ids(trayTasks(tray))).toEqual(["early", "late", "undated", "outside-early", "outside-late"]);
+    expect(trayTasks(tray).every((t) => t.status === "open" && t.x === null)).toBe(true);
+  });
+
+  it("puts tasks from outside senders below all the others, each group keeping its order", () => {
+    const rows = trayTasks(tray);
+    const firstOutside = rows.findIndex((t) => t.from_outside !== null);
+    expect(firstOutside).toBeGreaterThan(-1);
+    expect(rows.slice(firstOutside).every((t) => t.from_outside !== null)).toBe(true);
+    expect(rows.slice(0, firstOutside).map((t) => t.id)).toEqual(["early", "late", "undated"]);
+    expect(rows.slice(firstOutside).map((t) => t.id)).toEqual(["outside-early", "outside-late"]);
   });
 });

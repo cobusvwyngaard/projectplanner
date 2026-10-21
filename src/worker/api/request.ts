@@ -5,7 +5,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import type { MutationResponse, RevertResponse } from "../../shared/api";
 import type { NoteView, TaskView } from "../../shared/types";
-import { provenanceFor } from "../board/provenance";
+import { provenanceFor, taskViews } from "../board/provenance";
 import type { RowKind, RowTypes } from "../board/queries";
 import type { AppBindings } from "../env";
 import { ValidationError } from "../lib/errors";
@@ -77,9 +77,11 @@ export async function noteResponse(db: D1Database, result: MutationResult): Prom
   return { row: { ...row, prov: prov.get(row.id) ?? null }, event: result.event };
 }
 
-/** A task change with the task's provenance badges. */
+/** A task change with the task's provenance badges and outside-sender flag. */
 export async function taskResponse(db: D1Database, result: MutationResult): Promise<MutationResponse<TaskView>> {
   const row = rowAs("task", result);
-  const prov = await provenanceFor(db, "task", [row.id]);
-  return { row: { ...row, prov: prov.get(row.id) ?? null }, event: result.event };
+  const views = await taskViews(db, [row]);
+  const view = views[0];
+  if (view === undefined) throw new Error("taskViews did not return the task");
+  return { row: view, event: result.event };
 }

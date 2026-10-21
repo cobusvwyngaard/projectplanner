@@ -93,6 +93,18 @@ at the bottom of each section.
   three times. A change to the same fields then shows as a conflict; a
   change to other fields lets the revert go ahead; after three misses the
   person gets "changed at the same moment, try again".
+- **`from_outside` is derived in the Worker, not guessed in the app.** A task
+  came from outside when one of its source captures is an email whose From
+  participant is either nobody in the planner (`"unregistered"`) or a planner
+  person whose address is not verified (`"unverified"`); if both are true,
+  unregistered wins. The rule needs the task's `source_capture_ids`, the
+  email participants and the verification flag, and the browser receives
+  none of that with a task, so the Worker works it out next to `prov` and
+  sends it on every `TaskView` the bootstrap, the change feed and mutation
+  responses carry (and from `get_board` to Claude). One query answers a whole
+  page of tasks, so marking tasks never becomes a query per task. The app
+  only displays it: the tray sorts flagged tasks below all others, and the
+  tray item, board card, List view and item panel show the reason in red.
 
 ## Login, sessions and OAuth
 

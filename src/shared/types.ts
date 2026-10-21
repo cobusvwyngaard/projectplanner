@@ -219,8 +219,13 @@ export interface NoteView extends Note {
   prov: Provenance | null;
 }
 
+/** Why a task counts as coming from outside: its sender was not a planner person, or was one whose address failed verification. */
+export type FromOutside = "unregistered" | "unverified";
+
 export interface TaskView extends Task {
   prov: Provenance | null;
+  /** Set when a source capture of the task is an email from outside (SPEC section 5) */
+  from_outside: FromOutside | null;
 }
 
 export interface Session {

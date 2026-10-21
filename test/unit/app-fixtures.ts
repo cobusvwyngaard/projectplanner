@@ -41,6 +41,7 @@ export function task(over: Partial<TaskView> & { id: string }): TaskView {
     updated_at: T0,
     archived_at: null,
     prov: null,
+    from_outside: null,
     ...over,
   };
 }

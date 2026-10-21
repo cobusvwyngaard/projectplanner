@@ -5,7 +5,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { Id, Label, NoteView, TaskView } from "../../shared/types";
 import { createNote, createTask, setTaskDone } from "../actions";
-import { AssigneeChip, DueChip, ItemLabel, ProvenanceLine } from "../components/ui";
+import { AssigneeChip, DueChip, FromOutsideNote, ItemLabel, ProvenanceLine } from "../components/ui";
 import { useStoredState } from "../hooks";
 import { noteTitle, taskTitle } from "../lib/items";
 import {
@@ -133,6 +133,7 @@ function TaskRow({ task }: { task: TaskView }) {
           <ItemLabel labelId={task.label_id} small />
           <AssigneeChip userId={task.assignee_id} />
           <DueChip due={task.due_date} done={done} />
+          {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
           <ProvenanceLine prov={task.prov} />
         </span>
       </button>

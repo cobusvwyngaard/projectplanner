@@ -6,7 +6,7 @@ import { memo, type MouseEvent } from "react";
 import { textColourFor } from "../../shared/colour";
 import { NOTE_SIZE, resizeNote, setTaskDone, unplaceTask } from "../actions";
 import { CloseIcon } from "../components/icons";
-import { AssigneeChip, DueChip, ProvenanceLine } from "../components/ui";
+import { AssigneeChip, DueChip, FromOutsideNote, ProvenanceLine } from "../components/ui";
 import type { NoteNode, TaskNode } from "../lib/board";
 import { noteTitle, taskTitle } from "../lib/items";
 import { usePlanner } from "../store";
@@ -78,6 +78,7 @@ export const TaskCard = memo(function TaskCard({ data }: NodeProps<TaskNode>) {
         </label>
         <div className="task-main">
           <h3 className="task-title">{title}</h3>
+          {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
           <div className="card-meta">
             <AssigneeChip userId={task.assignee_id} />
             <DueChip due={task.due_date} done={done} />

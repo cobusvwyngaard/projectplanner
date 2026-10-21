@@ -1,11 +1,12 @@
 // Read tools for the Claude connector (SPEC section 7). Plain functions over
 // ToolContext, so they are testable without MCP; agent.ts registers them.
 
-import type { Capture, CaptureAttachment, EmailParticipant, User } from "../../../shared/types";
+import type { Capture, CaptureAttachment, EmailParticipant, FromOutside, User } from "../../../shared/types";
 import { localToday } from "../../../shared/dates";
 import { NotFoundError } from "../../lib/errors";
 import { ENTITIES } from "../../mutate/entities";
 import { attachmentsForCaptures, activeLabels, activeLinks, getRow, listUsers, openNotes, openTasks } from "../../board/queries";
+import { fromOutsideFor } from "../../board/provenance";
 import { itemHistory } from "../../board/activity";
 import { captureReady, type ToolContext } from "../runs";
 
@@ -203,6 +204,7 @@ export async function getBoard(
     assignee_id: string | null;
     due_date: string | null;
     status: string;
+    from_outside: FromOutside | null;
   }[];
   links: { a: { type: string; id: string }; b: { type: string; id: string } }[];
   truncated: boolean;
@@ -232,6 +234,7 @@ export async function getBoard(
   tasks.sort(newestFirst);
   const tasksTruncated = tasks.length > MAX_BOARD_TASKS;
   tasks = tasks.slice(0, MAX_BOARD_TASKS);
+  const outside = await fromOutsideFor(db, tasks.map((t) => t.id));
 
   const noteIds = new Set(notes.map((n) => n.id));
   const taskIds = new Set(tasks.map((t) => t.id));
@@ -253,6 +256,7 @@ export async function getBoard(
       assignee_id: t.assignee_id,
       due_date: t.due_date,
       status: t.status,
+      from_outside: outside.get(t.id) ?? null,
     })),
     links,
     truncated: notesTruncated || tasksTruncated,

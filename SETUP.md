@@ -226,33 +226,41 @@ forwards one to it), and the message becomes a capture in the Inbox for Claude
 to work on like any other. Cloudflare Email Routing delivers mail for that
 address to the Worker's `email()` handler; no other email service is used.
 
-### The address and the domain
+### The domain
 
-The domain that receives the planner's mail must be a zone in the same
-Cloudflare account as the Worker. Do **not** point the owner's everyday domain
-at Cloudflare: Email Routing replaces that domain's MX records, which would
-move Proton's mail too. Use either
+Use a domain registered through **Cloudflare Registrar** in the same
+Cloudflare account as the Worker (it is then a Cloudflare DNS zone
+automatically). Do **not** use the owner's everyday domain
+(`vanwyngaard.co.za`): Email Routing replaces a domain's MX records, which
+would take its mail away from Proton.
 
-- a subdomain with its own MX records (for example `planner.example.co.za`,
-  giving `inbox@planner.example.co.za`), or
-- a separate domain bought for the planner.
+One domain can serve several projects: each Worker gets its own address, or a
+subdomain of its own.
 
-### Setting it up **(unverified: menu names)**
+### Setting it up
 
-1. Add the (sub)domain as a zone in Cloudflare, in the same account as the
-   Worker.
-2. Deploy the Worker (`npm run deploy`). The `email()` handler is part of it
-   already; the address below is not needed for the deploy itself.
-3. In that zone: **Email → Email Routing → Enable Email Routing**. Cloudflare
-   adds the MX and TXT records. This is the step that must stay off the
-   everyday domain.
-4. **Email Routing → Routes**: create a custom address, for example
-   `inbox@planner.example.co.za`, with the action **Send to a Worker**, and
-   choose `projectplanner`. A catch-all route sends every address on the
-   (sub)domain to the Worker if you would rather not name one. The exact steps
-   for the receiving address follow once the domain is chosen.
-5. Register the addresses people send from or are sent to (see **Registering
+Menu names below are from Cloudflare's Email Routing documentation (checked
+October 2026); the dashboard may word them slightly differently.
+
+1. Register the domain: **Domain Registration → Register Domains**.
+2. Enable Email Routing on it: **Compute → Email Service → Email Routing →
+   Onboard Domain**, choose the domain and select **Done**. Cloudflare adds the
+   MX, SPF and DKIM records itself; they usually take effect within 5 to 15
+   minutes.
+3. Route the planner's address to the Worker: in **Email Routing**, open the
+   domain → **Routing Rules** → **Create routing rule**. Email pattern: the
+   part before the @ (for example `inbox`); Action: **Send to a Worker**;
+   Worker: `projectplanner`. Select **Save**. The planner's address is then
+   `inbox@<your domain>`.
+4. Register each person's own addresses in the planner (see **Registering
    addresses** below).
+5. Send the first test email (checklist below), then open the Worker's logs
+   (**Workers & Pages → projectplanner → Logs**) and look for a line starting
+   `email auth:`. If there is one, the Worker did not recognise Cloudflare's
+   authentication results, so every sender counts as not verified: send that
+   line (it holds no addresses) to whoever maintains the code so the
+   `CLOUDFLARE_AUTHSERV_IDS` setting can be corrected. No such line means the
+   results were recognised.
 
 ### Registering addresses
 
@@ -297,6 +305,7 @@ takes it away again.
 
 - [ ] Send an email from a registered address to the planner address and check that it appears in the Inbox with its body.
 - [ ] Send one with an attachment and check that the file downloads.
-- [ ] Forward an email from someone else (with the planner address in To or Cc) and check that it is accepted but marked as not verified.
+- [ ] Have someone outside the planner send an email to a registered address with the planner address in Cc, and check that it is accepted and marked "Sender not verified".
+- [ ] Check the Worker's logs for an `email auth:` line (step 5 above).
 - [ ] Send from an unregistered address to the planner address alone and check that nothing is stored.
 

@@ -75,8 +75,8 @@ src/app/               React SPA (Vite); index.html at the repo root
   capture/             Capture sheet (record/upload/text), AudioPlayer
   components/          chips, badges, times, event rows and Revert
   styles.css           all app styles; board/board.css loads with the canvas
-static/                files copied as-is into the build (favicon.svg; the PWA
-                       manifest, sw.js and icons come with the capture phase)
+static/                files copied as-is into the build (favicon.svg, the PWA
+                       manifest, sw.js and the icons)
 scripts/e2e-server.mjs wrangler dev on port 8788 with a fresh local database
 test/worker/           Vitest inside workerd (real D1/R2/DO via Miniflare)
 test/unit/             Vitest under Node (pure functions, source scans)
@@ -302,6 +302,20 @@ stop working.
 - Plain CSS with custom properties (`src/app/styles.css`), light and dark via
   `prefers-color-scheme`, system font stack. No external fonts, CDNs or
   analytics; the CSP only allows `'self'`.
+- Home-screen app: `static/manifest.webmanifest` (name, colours, portrait,
+  the four icons in `static/icons/`) is linked from `index.html`, together
+  with `static/sw.js`, which registers itself at the root scope. The service
+  worker caches only the hashed `/assets/*` files (cache-first, stored after
+  a plain 200); pages and `/api` always go to the network, and a navigation
+  with no network answers with a plain offline page that carries no planner
+  data. Bump its `VERSION` when the rules change; the worker serves these
+  files as public with no data (`src/worker/app.ts`).
+- Board shortcuts (`src/app/board/shortcuts.ts`): one `SHORTCUTS` table feeds
+  the key handling, the **?** dialog (`ShortcutsDialog.tsx`, a native
+  `<dialog>`) and the unit tests. N, T, F, +, -, 0, Esc and ? act on the
+  board; Enter, the arrow keys and Delete/Backspace are listed as rows with
+  no action because React Flow handles them. Presses are ignored while
+  typing, while a dialog is open, or with Ctrl/Meta/Alt held.
 - Text on a label colour uses `textColourFor()` from `src/shared/colour.ts`.
 - All UI text in South African English: colour, organise, cancelled,
   "Signed-in browsers", dates as 14 Oct 2026.

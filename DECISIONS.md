@@ -327,6 +327,14 @@ at the bottom of each section.
 
 ## Front end
 
+- **The service worker caches only `/assets`.** The hashed files under
+  `/assets/` never change under the same name, so cache-first makes a repeat
+  visit start fast and cannot serve stale code (the name changes with the
+  content). Pages are never cached: every page is behind the session, so a
+  cached page could show stale planner data or a signed-out shell, and `/api`
+  always goes to the network so the change feed stays live. Offline, a
+  navigation answers with a plain page that says so and carries no planner
+  data; there is no offline sync in v1 (SPEC 6.1).
 - **One store, optimistic changes.** `PlannerStore` (`lib/sync.ts`) holds the
   bootstrap state. A change shows at once; while its request is in flight
   the change feed holds that row back (`held`, with the poll's highest seq),

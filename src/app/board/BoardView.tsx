@@ -26,9 +26,9 @@ import {
   type SelectionDragHandler,
   type XYPosition,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
 import { NEW_NOTE, createNote, createTask, linkItems, moveItems, placeTask, unlink } from "../actions";
-import { FitIcon, PlusIcon, TrayIcon } from "../components/icons";
+import { FitIcon, KeyboardIcon, PlusIcon, TrayIcon } from "../components/icons";
 import { isBoolean, useIsPhone, useStoredState } from "../hooks";
 import { nearestFreeSpot, occupiedBoxes, TASK_CARD } from "../../shared/placement";
 import { boardEdges, boardNodes, mergeEdges, mergeNodes, nodeItem, type BoardNode, type LinkEdge } from "../lib/board";
@@ -37,6 +37,8 @@ import { openItem } from "../router";
 import { usePlanner } from "../store";
 import { NoteCard, TaskCard } from "./cards";
 import { LinkEdgeView } from "./LinkEdge";
+import { ShortcutsDialog } from "./ShortcutsDialog";
+import { isTypingTarget, resolveShortcut, type BoardAction } from "./shortcuts";
 import { TRAY_MIME, Tray } from "./Tray";
 
 const nodeTypes: NodeTypes = { note: NoteCard, task: TaskCard };
@@ -82,6 +84,7 @@ function Board() {
   const wrapper = useRef<HTMLDivElement>(null);
   const [trayOpen, setTrayOpen] = useStoredState("planner.board.tray", !phone, isBoolean);
   const [addingTask, setAddingTask] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const fresh = useMemo(() => boardNodes(notes.values(), tasks.values()), [notes, tasks]);
   const [nodes, setNodes] = useState<BoardNode[]>(fresh);
@@ -196,8 +199,71 @@ function Board() {
     void placeTask(taskId, taskCorner(flow.screenToFlowPosition({ x: e.clientX, y: e.clientY })));
   };
 
+  /** Escape on the board: nothing selected any more (the item panel has its own Escape). */
+  const clearSelection = () => {
+    setNodes((shown) => shown.map((node) => (node.selected ? { ...node, selected: false } : node)));
+    setEdges((shown) => shown.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)));
+  };
+
+  /** What a shortcut does: the same moves the toolbar buttons make. */
+  const runBoardAction = (action: BoardAction) => {
+    switch (action) {
+      case "new-note":
+        void addNote(clearSpotInView(noteCorner, NEW_NOTE));
+        break;
+      case "new-task":
+        setAddingTask(true);
+        break;
+      case "fit":
+        void flow.fitView({ ...(phone ? FIT_PHONE : FIT), duration: 300 });
+        break;
+      case "zoom-in":
+        flow.zoomIn({ duration: 200 });
+        break;
+      case "zoom-out":
+        flow.zoomOut({ duration: 200 });
+        break;
+      case "zoom-100":
+        flow.zoomTo(1, { duration: 200 });
+        break;
+      case "clear-selection":
+        clearSelection();
+        break;
+      case "show-shortcuts":
+        setShortcutsOpen(true);
+        break;
+    }
+  };
+
+  // The keys in the shortcuts table (shortcuts.ts). They belong to the board:
+  // they work while focus sits on the canvas or on the page around it (a
+  // click on the canvas leaves focus on <main>), and never while a field has
+  // focus or a dialog is open. The listener is re-hung after each render so
+  // it always reads the latest board state.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const canvas = wrapper.current;
+      // Focus in the header, the tray or any other control keeps its own keys.
+      if (canvas === null || active === null || (!canvas.contains(active) && !active.contains(canvas))) return;
+      const action = resolveShortcut({
+        key: e.key,
+        ctrl: e.ctrlKey,
+        meta: e.metaKey,
+        alt: e.altKey,
+        inTextField: isTypingTarget(active),
+        dialogOpen: document.querySelector('[role="dialog"], dialog[open]') !== null,
+      });
+      if (action === null) return;
+      e.preventDefault();
+      runBoardAction(action);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
   // Enter on a focused card opens it, like a click.
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Enter" || !(e.target instanceof HTMLElement) || !e.target.classList.contains("react-flow__node")) return;
     const ref = parseItemKey(e.target.dataset.id ?? "");
     if (ref) openItem(ref);
@@ -258,6 +324,9 @@ function Board() {
             <button type="button" className="button" onClick={() => void flow.fitView({ ...(phone ? FIT_PHONE : FIT), duration: 300 })}>
               <FitIcon /> Fit
             </button>
+            <button type="button" className="button" onClick={() => setShortcutsOpen(true)}>
+              <KeyboardIcon /> Shortcuts
+            </button>
             {!trayOpen && (
               <button type="button" className="button" onClick={() => setTrayOpen(true)} aria-label={`Show the tray (${unplacedCount} tasks not on the board)`}>
                 <TrayIcon /> Tray <span className="count">{unplacedCount}</span>
@@ -272,6 +341,7 @@ function Board() {
         </ReactFlow>
       </div>
       {trayOpen && <Tray onClose={() => setTrayOpen(false)} onPlace={(id) => void placeTask(id, clearSpotInView(taskCorner, TASK_CARD))} />}
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

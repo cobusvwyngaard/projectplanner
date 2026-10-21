@@ -71,8 +71,43 @@ describe("without a session", () => {
     expectSecurityHeaders(icon);
   });
 
+  it("serves the manifest, the service worker and the app icons with the right content types", async () => {
+    const manifest = await call("/manifest.webmanifest");
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers.get("Content-Type")).toBe("application/manifest+json");
+    const sw = await call("/sw.js");
+    expect(sw.status).toBe(200);
+    expect(sw.headers.get("Content-Type")).toContain("javascript");
+    for (const icon of ["icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"]) {
+      const res = await call(`/icons/${icon}`);
+      expect(res.status, icon).toBe(200);
+      expect(res.headers.get("Content-Type"), icon).toBe("image/png");
+      expectSecurityHeaders(res);
+    }
+  });
+
+  it("the manifest is valid JSON and names the app the home screen installs", async () => {
+    const res = await call("/manifest.webmanifest");
+    const manifest: unknown = await res.json();
+    expect(manifest).toMatchObject({
+      id: "/",
+      name: "Shared Planner",
+      short_name: "Planner",
+      start_url: "/",
+      scope: "/",
+      display: "standalone",
+      background_color: "#f4f2ec",
+      theme_color: "#2b6b5a",
+      icons: [
+        { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      ],
+    });
+  });
+
   it("answers a public file that does not exist with a 404, never the app shell", async () => {
-    for (const path of ["/sw.js", "/icons/missing.png", "/icons/", "/icons"]) {
+    for (const path of ["/icons/missing.png", "/icons/", "/icons"]) {
       const res = await call(path);
       expect(res.status, path).toBe(404);
       expect(await res.text(), path).not.toContain("spa-shell");

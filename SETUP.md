@@ -134,6 +134,15 @@ Either person can do this for both. Open **Settings → People**, change the
 
 ## 6. iPhone home-screen app
 
+The planner installs as an app on the home screen:
+
+- **iPhone (Safari):** open the planner, press the **Share** button and choose
+  **Add to Home Screen**.
+- **Android (Chrome):** open the planner, open the Chrome menu (the three
+  dots) and choose **Install app** (or **Add to Home screen**).
+
+The icon opens the planner full screen, without the browser's address bar.
+
 On an iPhone, the planner added to the home screen may keep its own cookies,
 separate from Safari. You may then need to enter your phrase once more in the
 home-screen app, even though Safari is already signed in **(unverified on a

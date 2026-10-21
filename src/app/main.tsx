@@ -16,3 +16,11 @@ if (root) {
     </StrictMode>,
   );
 }
+
+// The service worker (static/sw.js) caches only hashed assets; the planner
+// works without it, so a failed registration is not worth troubling anyone.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => console.warn("The service worker was not registered."));
+  });
+}

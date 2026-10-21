@@ -160,6 +160,19 @@ Badges ("Cobus", "Claude (via Cobus)") come from the first and last event of
 each note/task (`src/worker/board/provenance.ts`), returned as `prov` on
 `NoteView`/`TaskView`. `src/shared/actors.ts` formats an `ActorRef` for display.
 
+`TaskView.from_outside` says that a task came from an email sent from outside
+the planner: `"unregistered"` when one of the task's source captures is an
+email whose From person is not a planner user, `"unverified"` when the From
+person is a planner user whose address failed verification, and null
+otherwise; unregistered wins when both are true. `fromOutsideFor()` in the
+same module works it out for a whole page of tasks in one query — their
+events, `json_each(source_capture_ids)` and the email captures behind them —
+so no request runs a query per task. The bootstrap, the change feed and every
+mutation response carry the field, and `get_board` returns it to Claude. The
+tray puts flagged tasks below all others, and the tray item, board card, List
+view and item panel mark them in red and say why (`FromOutsideNote` in
+`src/app/components/ui.tsx`, `.from-outside` in `src/app/styles.css`).
+
 ## Email capture (SPEC 11)
 
 Cloudflare Email Routing calls `email()` (`src/worker/email/receive.ts`) for the
@@ -216,7 +229,9 @@ The email path and the Inbox card are covered end to end by
 address in Cc lets a stranger's message through, the card shows its body and
 attachment, the attachment downloads as the text that was attached, a message
 with no registered address in From/To/Cc is refused with a 400, and a
-redelivery of the same Message-ID leaves one card (see `e2e/README.md`).
+redelivery of the same Message-ID leaves one card. The same spec makes a task
+from a stranger's message the way Claude would and checks that the tray puts
+it last and marks it as coming from outside (see `e2e/README.md`).
 
 ## MCP layer
 

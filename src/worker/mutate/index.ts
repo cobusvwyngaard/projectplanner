@@ -12,7 +12,7 @@
 // So the entity write and its event commit together or not at all. Claude's
 // writes additionally carry a guard that its run is still open.
 
-import type { ItemRef, PlannerEvent } from "../../shared/types";
+import type { ItemRef, ItemType, LinkDirection, PlannerEvent } from "../../shared/types";
 import {
   ConflictError,
   ForbiddenError,
@@ -35,6 +35,12 @@ export const RUN_MAX_AGE_MS = 2 * HOUR_MS;
 
 const MAX_ATTEMPTS = 3;
 
+/** A dependency between two tasks: the one that must be done first, and the one that waits. */
+export interface Dependency {
+  before: ItemRef;
+  after: ItemRef;
+}
+
 interface Common {
   /** Captures this change was based on (Claude writes) */
   sourceCaptureIds?: readonly string[];
@@ -42,10 +48,16 @@ interface Common {
   expect?: Row;
 }
 
+/** Changes to a note or a task. A link is never updated this way: it is linked, relinked or unlinked. */
+type RowChange = Exclude<MutableEntity, "link">;
+
 export type Mutation =
   | (Common & { entity: MutableEntity; action: "create"; id?: string; values: Row })
   | (Common & { entity: "link"; action: "link"; a: ItemRef; b: ItemRef })
-  | (Common & { entity: MutableEntity; action: "update"; id: string; patch: Row })
+  | (Common & { entity: "link"; action: "link"; depends: Dependency })
+  | (Common & { entity: RowChange; action: "update"; id: string; patch: Row })
+  | (Common & { entity: "link"; action: "relink"; id: string; related: true })
+  | (Common & { entity: "link"; action: "relink"; id: string; depends: Dependency })
   | (Common & { entity: MutableEntity; action: "archive" | "unarchive"; id: string })
   | (Common & { entity: "link"; action: "unlink"; id: string })
   | (Common & { entity: "task"; action: "complete" | "reopen"; id: string })
@@ -58,6 +70,8 @@ export interface MutationResult {
   row: Row;
   /** The event written, or null when nothing changed */
   event: PlannerEvent | null;
+  /** Things worth telling the person about, such as a task ticked off too early */
+  warnings: string[];
 }
 
 export interface MutateOptions {
@@ -124,10 +138,16 @@ export async function mutateMany(
       return prepared.map((p) => {
         const index = eventIndex.get(p);
         const seq = index === undefined ? 0 : Number(results[index]?.meta.last_row_id ?? 0);
-        return { entity: p.entity, id: p.id, row: p.row, event: p.event ? toPlannerEvent(p.event, seq) : null };
+        return {
+          entity: p.entity,
+          id: p.id,
+          row: p.row,
+          event: p.event ? toPlannerEvent(p.event, seq) : null,
+          warnings: p.warnings,
+        };
       });
     }
-    return prepared.map((p) => ({ entity: p.entity, id: p.id, row: p.row, event: null }));
+    return prepared.map((p) => ({ entity: p.entity, id: p.id, row: p.row, event: null, warnings: p.warnings }));
   }
 }
 
@@ -156,11 +176,14 @@ interface Prepared {
   row: Row;
   statements: D1PreparedStatement[];
   event: NewEvent | null;
+  warnings: string[];
 }
 
 /** Rows read or written earlier in the same mutateMany() call. */
 class Context {
   private readonly rows = new Map<string, Row | null>();
+  /** Dependency edges prepared earlier in this call, so one batch cannot make a circle. */
+  private readonly edges: { linkId: string; from: string; to: string }[] = [];
   readonly ts: string;
 
   constructor(
@@ -185,6 +208,20 @@ class Context {
 
   remember(entity: MutableEntity, id: string, row: Row): void {
     this.rows.set(`${entity}:${id}`, row);
+  }
+
+  /** The dependency edges prepared earlier in this call, excluding one link. */
+  pendingEdges(excludeLinkId: string | null): { linkId: string; from: string; to: string }[] {
+    return this.edges
+      .filter((edge) => edge.linkId !== excludeLinkId)
+      .map((edge) => ({ linkId: edge.linkId, from: edge.from, to: edge.to }));
+  }
+
+  /** Remember the direction of a link prepared in this call. */
+  rememberEdge(linkId: string, from: string | null, to: string | null): void {
+    const index = this.edges.findIndex((edge) => edge.linkId === linkId);
+    if (index >= 0) this.edges.splice(index, 1);
+    if (from !== null && to !== null) this.edges.push({ linkId, from, to });
   }
 
   async readLinkPair(a: ItemRef, b: ItemRef): Promise<Row | null> {
@@ -249,7 +286,7 @@ function authorise(actor: Actor, m: Mutation, spec: EntitySpec): void {
   if ((m.action === "archive" || m.action === "unarchive") && spec.archive === null) {
     throw new ValidationError(`This ${m.entity} cannot be archived.`);
   }
-  if ((m.action === "link" || m.action === "unlink") && actor.kind === "system") {
+  if ((m.action === "link" || m.action === "unlink" || m.action === "relink") && actor.kind === "system") {
     throw new ForbiddenError("The system does not link items.");
   }
 }
@@ -284,6 +321,8 @@ async function prepare(ctx: Context, m: Mutation): Promise<Prepared> {
       return prepareCreate(ctx, m, spec);
     case "link":
       return prepareLink(ctx, m);
+    case "relink":
+      return prepareRelink(ctx, m);
     default:
       return prepareChange(ctx, m, spec);
   }
@@ -318,32 +357,221 @@ async function prepareCreate(
     row,
     statements: [statement],
     event: ctx.event(m.entity, id, "create", null, row, m),
+    warnings: [],
+  };
+}
+
+/** The two ends of a link and the way they relate. */
+interface Relation {
+  /** The ends, in the canonical order the row stores them */
+  ends: [ItemRef, ItemRef];
+  /** "none" for a plain connection; which end comes first for a dependency */
+  direction: LinkDirection;
+  /** The end that must be done first (null for a plain connection) */
+  before: ItemRef | null;
+  /** The end that waits for it (null for a plain connection) */
+  after: ItemRef | null;
+}
+
+/** "type:id", the way the ends of a link are compared and sorted. */
+function itemKey(ref: ItemRef): string {
+  return `${ref.type}:${ref.id}`;
+}
+
+/** The relation a link mutation asks for. */
+function relationOf(m: Extract<Mutation, { action: "link" }>): Relation {
+  if ("depends" in m) {
+    const ends = canonicalPair(m.depends.before, m.depends.after);
+    const direction: LinkDirection = itemKey(m.depends.before) === itemKey(ends[0]) ? "a_to_b" : "b_to_a";
+    return { ends, direction, before: m.depends.before, after: m.depends.after };
+  }
+  const ends = canonicalPair(m.a, m.b);
+  return { ends, direction: "none", before: null, after: null };
+}
+
+/** The kind of item a link points at. */
+function itemType(value: Value | undefined): ItemType {
+  if (value === "note" || value === "task") return value;
+  throw new ValidationError("A link joins two notes or tasks.");
+}
+
+/** The direction a link asks for. */
+function linkDirection(value: Value | undefined): LinkDirection {
+  if (value === "none" || value === "a_to_b" || value === "b_to_a") return value;
+  throw new ValidationError("A link has an unknown direction.");
+}
+
+/** The ends of a stored link, in the order the row keeps them. */
+function endsOf(row: Row): [ItemRef, ItemRef] {
+  return [
+    { type: itemType(row.a_type), id: String(row.a_id) },
+    { type: itemType(row.b_type), id: String(row.b_id) },
+  ];
+}
+
+/** An open dependency link: the end that comes first and the end that waits. */
+interface DependencyEdge {
+  linkId: string;
+  before: ItemRef;
+  after: ItemRef;
+}
+
+/** Every open dependency link, in the order the rows are stored. */
+async function dependencyLinks(db: D1Database): Promise<DependencyEdge[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, a_type, a_id, b_type, b_id, direction FROM links
+       WHERE archived_at IS NULL AND direction <> 'none'`,
+    )
+    .all<{ id: string; a_type: string; a_id: string; b_type: string; b_id: string; direction: string }>();
+  return results.map((row) => {
+    const ends = endsOf(row);
+    const [before, after] = linkDirection(row.direction) === "a_to_b" ? ends : [ends[1], ends[0]];
+    return { linkId: String(row.id), before, after };
+  });
+}
+
+/** True when `to` can be reached from `from` by following the edges. */
+function reaches(edges: readonly { from: string; to: string }[], from: string, to: string): boolean {
+  const next = new Map<string, string[]>();
+  for (const edge of edges) {
+    const list = next.get(edge.from);
+    if (list === undefined) next.set(edge.from, [edge.to]);
+    else list.push(edge.to);
+  }
+  const seen = new Set<string>();
+  const stack = [from];
+  while (stack.length > 0) {
+    const current = stack.pop() ?? "";
+    if (current === to) return true;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    for (const target of next.get(current) ?? []) stack.push(target);
+  }
+  return false;
+}
+
+/**
+ * A dependency is only allowed between two tasks, and never where it would
+ * make a circle of tasks waiting for each other. The link being changed is
+ * left out of the circle check, so a dependency can be reversed.
+ */
+async function checkRelation(ctx: Context, relation: Relation, excludeLinkId: string | null): Promise<void> {
+  if (relation.direction === "none") return;
+  for (const end of relation.ends) {
+    if (end.type !== "task") throw new ValidationError("A dependency can only be between two tasks.");
+  }
+  const edges: { from: string; to: string }[] = [];
+  for (const edge of await dependencyLinks(ctx.db)) {
+    if (edge.linkId === excludeLinkId) continue;
+    edges.push({ from: edge.before.id, to: edge.after.id });
+  }
+  for (const edge of ctx.pendingEdges(excludeLinkId)) edges.push(edge);
+  if (relation.before !== null && relation.after !== null) {
+    if (reaches(edges, relation.after.id, relation.before.id)) {
+      throw new ValidationError("That would make a circle of tasks waiting for each other.");
+    }
+  }
+}
+
+/**
+ * The open prerequisites of a task that are not done yet, as warnings for
+ * the person ticking it off. Ticking a task off is never refused, but the
+ * person is told what it still waits for.
+ */
+async function prerequisiteWarnings(ctx: Context, taskId: string): Promise<string[]> {
+  const pending = ctx.pendingEdges(null);
+  const prepared = new Set(pending.map((edge) => edge.linkId));
+  const edges = [
+    ...(await dependencyLinks(ctx.db))
+      .filter((edge) => !prepared.has(edge.linkId))
+      .map((edge) => ({ linkId: edge.linkId, from: edge.before.id, to: edge.after.id })),
+    ...pending,
+  ];
+  const waiting: string[] = [];
+  for (const edge of edges) {
+    if (edge.to !== taskId) continue;
+    if (!waiting.includes(edge.from)) waiting.push(edge.from);
+  }
+  const warnings: string[] = [];
+  for (const id of waiting) {
+    const row = await ctx.read("task", id);
+    if (!row || row.archived_at !== null) continue;
+    if (row.status === "done") continue;
+    const title = String(row.title ?? "").trim();
+    const name = title === "" ? "an unnamed task" : `"${title}"`;
+    warnings.push(`Waits for ${name}, which is not done yet.`);
+  }
+  return warnings;
+}
+
+/** Change the direction of an open link, or do nothing when it already has it. */
+async function changeDirection(
+  ctx: Context,
+  existing: Row,
+  relation: Relation,
+  m: Mutation,
+): Promise<Prepared> {
+  const id = String(existing.id);
+  if (String(existing.direction) === relation.direction) {
+    return { entity: "link", id, row: existing, statements: [], event: null, warnings: [] };
+  }
+  await checkRelation(ctx, relation, id);
+  const after: Row = { ...existing, direction: relation.direction };
+  ctx.remember("link", id, after);
+  ctx.rememberEdge(id, relation.before?.id ?? null, relation.after?.id ?? null);
+  return {
+    entity: "link",
+    id,
+    row: after,
+    statements: conditionalUpdate(ctx.db, ENTITIES.link, id, existing, { direction: relation.direction }, null),
+    event: ctx.event(
+      "link",
+      id,
+      "update",
+      { direction: existing.direction ?? null },
+      { direction: relation.direction },
+      m,
+    ),
+    warnings: [],
   };
 }
 
 async function prepareLink(ctx: Context, m: Extract<Mutation, { action: "link" }>): Promise<Prepared> {
-  const [a, b] = canonicalPair(m.a, m.b);
-  for (const end of [a, b]) {
+  const relation = relationOf(m);
+  const [a, b] = relation.ends;
+  for (const end of relation.ends) {
     const row = await ctx.read(end.type, end.id);
     if (!row || row.archived_at !== null) throw new NotFoundError(`No open ${end.type} with id ${end.id}.`);
   }
   const existing = await ctx.readLinkPair(a, b);
   if (existing && existing.archived_at === null) {
-    return { entity: "link", id: String(existing.id), row: existing, statements: [], event: null };
+    return changeDirection(ctx, existing, relation, m);
   }
   if (existing) {
-    // Re-link a pair that was unlinked earlier.
+    // Link a pair that was unlinked earlier, with the direction asked for.
     const id = String(existing.id);
-    const after: Row = { ...existing, archived_at: null };
+    const changes: Row = { archived_at: null };
+    if (String(existing.direction) !== relation.direction) changes.direction = relation.direction;
+    const after: Row = { ...existing, ...changes };
     ctx.remember("link", id, after);
+    ctx.rememberEdge(
+      id,
+      relation.before?.id ?? null,
+      relation.after?.id ?? null,
+    );
+    const before: Row = {};
+    for (const field of Object.keys(changes)) before[field] = existing[field] ?? null;
     return {
       entity: "link",
       id,
       row: after,
-      statements: conditionalUpdate(ctx.db, ENTITIES.link, id, existing, { archived_at: null }, null),
-      event: ctx.event("link", id, "link", { archived_at: existing.archived_at ?? null }, { archived_at: null }, m),
+      statements: conditionalUpdate(ctx.db, ENTITIES.link, id, existing, changes, null),
+      event: ctx.event("link", id, "link", before, changes, m),
+      warnings: [],
     };
   }
+  await checkRelation(ctx, relation, null);
   const id = ulid(ctx.now.getTime());
   const row: Row = {
     id,
@@ -351,6 +579,7 @@ async function prepareLink(ctx: Context, m: Extract<Mutation, { action: "link" }
     a_id: a.id,
     b_type: b.type,
     b_id: b.id,
+    direction: relation.direction,
     created_at: ctx.ts,
     archived_at: null,
   };
@@ -359,12 +588,41 @@ async function prepareLink(ctx: Context, m: Extract<Mutation, { action: "link" }
     .prepare(`INSERT INTO links (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`)
     .bind(...columns.map((c) => row[c] ?? null));
   ctx.remember("link", id, row);
-  return { entity: "link", id, row, statements: [statement], event: ctx.event("link", id, "link", null, row, m) };
+  ctx.rememberEdge(id, relation.before?.id ?? null, relation.after?.id ?? null);
+  return {
+    entity: "link",
+    id,
+    row,
+    statements: [statement],
+    event: ctx.event("link", id, "link", null, row, m),
+    warnings: [],
+  };
+}
+
+/** Change how an existing link relates its two ends. */
+async function prepareRelink(ctx: Context, m: Extract<Mutation, { action: "relink" }>): Promise<Prepared> {
+  const before = await ctx.read("link", m.id);
+  if (!before) throw new NotFoundError(`No link with id ${m.id}.`);
+  if (before.archived_at !== null) throw new NotFoundError(`No open link with id ${m.id}.`);
+  const ends = endsOf(before);
+  let relation: Relation;
+  if ("depends" in m) {
+    const pair = canonicalPair(m.depends.before, m.depends.after);
+    const keys = new Set([itemKey(pair[0]), itemKey(pair[1])]);
+    if (!keys.has(itemKey(ends[0])) || !keys.has(itemKey(ends[1]))) {
+      throw new ValidationError("A link can only be changed between the two items it joins.");
+    }
+    const direction: LinkDirection = itemKey(m.depends.before) === itemKey(ends[0]) ? "a_to_b" : "b_to_a";
+    relation = { ends, direction, before: m.depends.before, after: m.depends.after };
+  } else {
+    relation = { ends, direction: "none", before: null, after: null };
+  }
+  return changeDirection(ctx, before, relation, m);
 }
 
 async function prepareChange(
   ctx: Context,
-  m: Exclude<Mutation, { action: "create" | "link" }>,
+  m: Exclude<Mutation, { action: "create" | "link" | "relink" }>,
   spec: EntitySpec,
 ): Promise<Prepared> {
   const before = await ctx.read(m.entity, m.id);
@@ -431,8 +689,23 @@ async function prepareChange(
   }
 
   if (Object.keys(changes).length === 0) {
-    return { entity: m.entity, id: m.id, row: before, statements: [], event: null };
+    return { entity: m.entity, id: m.id, row: before, statements: [], event: null, warnings: [] };
   }
+
+  // A revert that puts a direction back on a link must not make a circle.
+  if (m.entity === "link" && changes.direction !== undefined && changes.direction !== "none") {
+    const ends = endsOf(before);
+    const direction = linkDirection(changes.direction);
+    const [first, second] = direction === "a_to_b" ? ends : [ends[1], ends[0]];
+    await checkRelation(ctx, { ends, direction, before: first, after: second }, m.id);
+  }
+
+  // Ticking a task off is never refused, but the person is told what it
+  // still waits for.
+  const warnings =
+    m.entity === "task" && m.action !== "revert" && changes.status === "done"
+      ? await prerequisiteWarnings(ctx, m.id)
+      : [];
 
   const after: Row = { ...before, ...changes };
   if (spec.touch) after[spec.touch] = ctx.ts;
@@ -445,6 +718,7 @@ async function prepareChange(
     row: after,
     statements: conditionalUpdate(ctx.db, spec, m.id, before, changes, spec.touch ? ctx.ts : null),
     event: ctx.event(m.entity, m.id, action, beforeDiff, changes, m, revertsEventId),
+    warnings,
   };
 }
 

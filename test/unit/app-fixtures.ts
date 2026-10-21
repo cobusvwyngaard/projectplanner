@@ -51,7 +51,16 @@ export function label(over: Partial<Label> & { id: string }): Label {
 }
 
 export function link(over: Partial<Link> & { id: string }): Link {
-  return { a_type: "note", a_id: "N1", b_type: "task", b_id: "T1", created_at: T0, archived_at: null, ...over };
+  return {
+    a_type: "note",
+    a_id: "N1",
+    b_type: "task",
+    b_id: "T1",
+    direction: "none",
+    created_at: T0,
+    archived_at: null,
+    ...over,
+  };
 }
 
 export function userEmail(over: Partial<UserEmail> & { id: string }): UserEmail {

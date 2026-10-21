@@ -225,6 +225,17 @@ at the bottom of each section.
   rejected call leaves the database untouched (tested by counting events
   before and after). `mark_captures` names the captures that are not
   claimed by this run instead of silently skipping them.
+- **The email participant rule is enforced in the Worker too (SPEC 11.4).**
+  The tool descriptions and the Project instructions tell Claude to assign a
+  task from an email only to a planner person on that email whom it asks, or
+  clearly implies should do it. But an email's text is untrusted data: a crafted message could try to steer a task to somebody who was not
+  on it. So `create_task` and `update_task` check the rule against the
+  capture's `email_participants_json` themselves — when every
+  `source_capture_ids` entry is an email and an `assignee_id` is set, that
+  person must be a participant of at least one of those emails, or the write
+  is refused with "That person is not on the source email; leave the task
+  unassigned." and nothing is written. Writes with no email sources, mixed
+  sources, or no assignee are unchanged.
 - **Attribution and undo come from the write path.** All writes use
   `claudeActor(userId, run_id)`, so every event carries
   `actor_kind='claude'`, the approving user (from the grant props) and the

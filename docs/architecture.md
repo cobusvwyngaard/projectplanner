@@ -251,6 +251,20 @@ The connector Claude talks to (SPEC sections 5 and 7) has three layers:
   `mutate` refuses a run that is finished, someone else's, or over two hours
   old, so a dead run cannot write.
 
+Email captures carry what Claude needs to act on them safely (SPEC 11.4).
+Every `get_inbox` item has `ready` — the same rule `start_run` claims by, kept
+as one function — and `author: null` when the sender was not verified, so no
+person is invented for a message whose From address may be forged. An item of
+kind `email` also has `email {subject, sender_verified, from, participants,
+attachments}`: each participant is `{address, name, role, user_id,
+display_name}`, with `user_id` and `display_name` null for an address that is
+not a planner person, and every attachment of all the listed emails is loaded
+in one query. `create_task` and `update_task` enforce the participant rule in
+the Worker as well: when every source capture is an email and an
+`assignee_id` is set, that person must be a participant of at least one of
+those emails, otherwise the call is refused with "That person is not on the
+source email; leave the task unassigned." and nothing is written.
+
 Read tools and write tools are plain functions `(ctx, input)` — the agent
 only translates MCP calls into function calls, which is why the tests in
 `test/worker/mcp-tools.test.ts` and `test/worker/mcp-e2e.test.ts` can call

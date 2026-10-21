@@ -206,7 +206,14 @@ export async function getBoard(
     status: string;
     from_outside: FromOutside | null;
   }[];
-  links: { a: { type: string; id: string }; b: { type: string; id: string } }[];
+  links: {
+    a: { type: string; id: string };
+    b: { type: string; id: string };
+    /** "related" for a plain connection, "depends" for a dependency between two tasks */
+    kind: "related" | "depends";
+    /** The end that must be done first; null for a plain connection */
+    before: { type: string; id: string } | null;
+  }[];
   truncated: boolean;
 }> {
   const { db } = ctx;
@@ -244,7 +251,14 @@ export async function getBoard(
       const bOk = (l.b_type === "note" && noteIds.has(l.b_id)) || (l.b_type === "task" && taskIds.has(l.b_id));
       return aOk && bOk;
     })
-    .map((l) => ({ a: { type: l.a_type, id: l.a_id }, b: { type: l.b_type, id: l.b_id } }));
+    .map((l) => {
+      const a = { type: l.a_type, id: l.a_id };
+      const b = { type: l.b_type, id: l.b_id };
+      // A dependency says which end comes first; a plain connection has none.
+      const kind: "related" | "depends" = l.direction === "none" ? "related" : "depends";
+      const before = l.direction === "a_to_b" ? a : l.direction === "b_to_a" ? b : null;
+      return { a, b, kind, before };
+    });
 
   return {
     notes: notes.map((n) => ({ id: n.id, title: n.title, body: cut(n.body, BOARD_TEXT_LIMIT), label_id: n.label_id })),

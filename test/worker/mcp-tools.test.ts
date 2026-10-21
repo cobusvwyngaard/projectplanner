@@ -211,7 +211,9 @@ describe("get_board", () => {
     const board = await getBoard(ctx(), {});
     expect(board.notes).toEqual([{ id: note, title: "The plan", body: "", label_id: null }]);
     expect(board.tasks.map((t) => t.id)).toEqual([open]);
-    expect(board.links).toEqual([{ a: { type: "note", id: note }, b: { type: "task", id: open } }]);
+    expect(board.links).toEqual([
+      { a: { type: "note", id: note }, b: { type: "task", id: open }, kind: "related", before: null },
+    ]);
     expect(board.truncated).toBe(false);
 
     const withDone = await getBoard(ctx(), { include_done: true });
@@ -1016,6 +1018,91 @@ describe("link_items and unlink_items", () => {
       linkItems(ctx(), { run_id: run, a: { type: "note", id: note }, b: { type: "task", id: task } }),
     ).rejects.toBeInstanceOf(NotFoundError);
     expect(await count("links")).toBe(0);
+  });
+
+  it("links two tasks so that one waits for the other", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    await linkItems(ctx(), {
+      run_id: run,
+      a: { type: "task", id: first },
+      b: { type: "task", id: second },
+      kind: "depends",
+    });
+    const link = await db.prepare(`SELECT direction FROM links`).first<{ direction: string }>();
+    expect(link?.direction).toBe("a_to_b");
+  });
+
+  it("refuses a dependency that is not between two tasks, or that makes a circle", async () => {
+    const note = await newNote();
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const third = await newTask("Call the plumber");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+
+    await expect(
+      linkItems(ctx(), { run_id: run, a: { type: "note", id: note }, b: { type: "task", id: second }, kind: "depends" }),
+    ).rejects.toThrow("A dependency can only be between two tasks.");
+
+    await linkItems(ctx(), { run_id: run, a: { type: "task", id: first }, b: { type: "task", id: second }, kind: "depends" });
+    await linkItems(ctx(), { run_id: run, a: { type: "task", id: second }, b: { type: "task", id: third }, kind: "depends" });
+    await expect(
+      linkItems(ctx(), { run_id: run, a: { type: "task", id: third }, b: { type: "task", id: first }, kind: "depends" }),
+    ).rejects.toThrow("That would make a circle of tasks waiting for each other.");
+    expect(await count("links")).toBe(2);
+  });
+
+  it("says which end of a dependency comes first", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+    await linkItems(ctx(), {
+      run_id: run,
+      a: { type: "task", id: second },
+      b: { type: "task", id: first },
+      kind: "depends",
+    });
+    const board = await getBoard(ctx(), {});
+    expect(board.links).toEqual([
+      {
+        a: { type: "task", id: first },
+        b: { type: "task", id: second },
+        kind: "depends",
+        before: { type: "task", id: second },
+      },
+    ]);
+  });
+});
+
+describe("update_task warnings", () => {
+  it("says what the task still waits for when it is ticked off", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+    await linkItems(ctx(), {
+      run_id: run,
+      a: { type: "task", id: first },
+      b: { type: "task", id: second },
+      kind: "depends",
+    });
+    const done = await updateTask(ctx(), {
+      run_id: run,
+      id: second,
+      patch: { status: "done" },
+      source_capture_ids: [],
+    });
+    expect(done.warnings).toEqual(['Waits for "Book plumber", which is not done yet.']);
+
+    await updateTask(ctx(), { run_id: run, id: first, patch: { status: "done" }, source_capture_ids: [] });
+    const again = await updateTask(ctx(), {
+      run_id: run,
+      id: second,
+      patch: { status: "open" },
+      source_capture_ids: [],
+    });
+    expect(again.warnings).toBeUndefined();
   });
 });
 

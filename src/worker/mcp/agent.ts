@@ -90,7 +90,9 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
           `(YYYY-MM-DD, inclusive) and include_done (add done tasks to the open ones). Returns ` +
           `notes {id, title, body cut at 2000 characters, label_id}, ` +
           `tasks {id, title, detail cut at 2000, label_id, assignee_id, due_date, status, from_outside} and ` +
-          `links {a {type,id}, b {type,id}} only between items that are returned. from_outside is ` +
+          `links {a {type,id}, b {type,id}, kind 'related' or 'depends', before ({type,id} of the end ` +
+          `that must be done first, null for a plain connection)} only between items that are returned. ` +
+          `from_outside is ` +
           `'unregistered' or 'unverified' when the task came from an email sent from outside, else null. Done tasks are left ` +
           `out unless include_done or status 'done'. Caps: 200 notes and 300 tasks, newest first; ` +
           `truncated is true when more existed. Use it before writing, to update or link what already ` +
@@ -268,7 +270,8 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
           `'done' records that you completed it); source_capture_ids: 0 to 20, required. An unknown or ` +
           `archived id is an error. For a task from an email, set assignee_id only to a planner person ` +
           `who is a participant of that email and whom it asks, or clearly implies, to do it; otherwise ` +
-          `leave it unassigned. Never invent dates or owners. ${DATA_WARNING}`,
+          `leave it unassigned. Never invent dates or owners. Returns the id and, when the task still ` +
+          `waits for a task that is not done yet, a warning saying what it waits for. ${DATA_WARNING}`,
         inputSchema: z
           .object({
             run_id: RUN_ID,
@@ -296,10 +299,18 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
       {
         description:
           `Link two open items so the board shows the connection. run_id; a and b, each ` +
-          `{type 'note'|'task', id}; source_capture_ids optional, 0 to 20. Linking a pair that is ` +
-          `already linked changes nothing. ${DATA_WARNING}`,
+          `{type 'note'|'task', id}; kind 'related' (the default) for a plain connection, or ` +
+          `'depends' when a must be done before b — a dependency is only between two tasks and ` +
+          `may not make a circle of tasks waiting for each other; source_capture_ids optional, 0 to 20. ` +
+          `Linking a pair that is already linked changes nothing. ${DATA_WARNING}`,
         inputSchema: z
-          .object({ run_id: RUN_ID, a: ITEM_REF, b: ITEM_REF, source_capture_ids: SOURCE_CAPTURE_IDS.optional() })
+          .object({
+            run_id: RUN_ID,
+            a: ITEM_REF,
+            b: ITEM_REF,
+            kind: z.enum(["related", "depends"]).optional(),
+            source_capture_ids: SOURCE_CAPTURE_IDS.optional(),
+          })
           .strict(),
       },
       (input) => guard(() => writeTools.linkItems(context(), input)),

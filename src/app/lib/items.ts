@@ -102,7 +102,7 @@ export function asNote(row: Record<string, unknown> | null): NoteView | null {
 /** A rebuilt task row with the fields the panel needs, or null if it does not look like a task. */
 export function asTask(row: Record<string, unknown> | null): TaskView | null {
   if (!row || typeof row.id !== "string" || typeof row.title !== "string" || typeof row.status !== "string") return null;
-  return { ...(row as unknown as TaskView), prov: null };
+  return { ...(row as unknown as TaskView), prov: null, from_outside: null };
 }
 
 /**

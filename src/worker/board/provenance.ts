@@ -4,6 +4,7 @@
 import type {
   ActorKind,
   ActorRef,
+  FromOutside,
   Id,
   ItemType,
   Note,
@@ -69,8 +70,58 @@ export async function noteViews(db: D1Database, notes: readonly Note[]): Promise
   return notes.map((n) => ({ ...n, prov: prov.get(n.id) ?? null }));
 }
 
-/** Tasks with their provenance badges. */
+/** Tasks with their provenance badges and whether they came from an outside sender. */
 export async function taskViews(db: D1Database, tasks: readonly Task[]): Promise<TaskView[]> {
-  const prov = await provenanceFor(db, "task", tasks.map((t) => t.id));
-  return tasks.map((t) => ({ ...t, prov: prov.get(t.id) ?? null }));
+  const ids = tasks.map((t) => t.id);
+  const [prov, outside] = await Promise.all([provenanceFor(db, "task", ids), fromOutsideFor(db, ids)]);
+  return tasks.map((t) => ({
+    ...t,
+    prov: prov.get(t.id) ?? null,
+    from_outside: outside.get(t.id) ?? null,
+  }));
+}
+
+interface OutsideRow {
+  entity_id: Id;
+  /** 0 = unregistered sender, 1 = unverified sender, 2 = every sender verified */
+  rank: number;
+}
+
+/**
+ * Why each task came from outside, keyed by task id. Only tasks with such a
+ * source appear.
+ *
+ * One query follows every source capture of every task to its email
+ * participants and ranks the From person: no planner person at all (0) beats
+ * a planner person whose address failed verification (1); a verified sender
+ * (2) is not outside. A capture with no readable From counts as unregistered,
+ * because its sender maps to nobody.
+ */
+export async function fromOutsideFor(db: D1Database, taskIds: Iterable<Id>): Promise<Map<Id, FromOutside>> {
+  const rows = await selectInChunks<OutsideRow>(db, taskIds, (part, marks) =>
+    db
+      .prepare(
+        `SELECT e.entity_id,
+                MIN(CASE
+                      WHEN json_extract(f.value, '$.user_id') IS NULL THEN 0
+                      WHEN c.email_sender_verified = 0 THEN 1
+                      ELSE 2
+                    END) AS rank
+         FROM events AS e
+         JOIN json_each(e.source_capture_ids) AS s
+         JOIN captures AS c ON c.id = s.value AND c.kind = 'email'
+         LEFT JOIN json_each(c.email_participants_json) AS f
+           ON json_extract(f.value, '$.role') = 'from'
+         WHERE e.entity_type = 'task' AND e.entity_id IN (${marks})
+         GROUP BY e.entity_id`,
+      )
+      .bind(...part),
+  );
+
+  const out = new Map<Id, FromOutside>();
+  for (const row of rows) {
+    if (row.rank === 0) out.set(row.entity_id, "unregistered");
+    else if (row.rank === 1) out.set(row.entity_id, "unverified");
+  }
+  return out;
 }

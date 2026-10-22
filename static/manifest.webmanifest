@@ -2,6 +2,7 @@
   "id": "/",
   "name": "Shared Planner",
   "short_name": "Planner",
+  "description": "A shared board for our tasks, notes, voice notes and emails.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

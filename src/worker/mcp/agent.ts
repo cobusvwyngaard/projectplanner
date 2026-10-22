@@ -271,7 +271,8 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
           `archived id is an error. For a task from an email, set assignee_id only to a planner person ` +
           `who is a participant of that email and whom it asks, or clearly implies, to do it; otherwise ` +
           `leave it unassigned. Never invent dates or owners. Returns the id and, when the task still ` +
-          `waits for a task that is not done yet, a warning saying what it waits for. ${DATA_WARNING}`,
+          `waits for a task that is not done yet, warnings saying what it waits for; completing it ` +
+          `still succeeds, and you tell the people about each warning in the run summary. ${DATA_WARNING}`,
         inputSchema: z
           .object({
             run_id: RUN_ID,
@@ -299,10 +300,13 @@ export class PlannerMcp extends McpAgent<Cloudflare.Env, Record<string, never>, 
       {
         description:
           `Link two open items so the board shows the connection. run_id; a and b, each ` +
-          `{type 'note'|'task', id}; kind 'related' (the default) for a plain connection, or ` +
-          `'depends' when a must be done before b — a dependency is only between two tasks and ` +
-          `may not make a circle of tasks waiting for each other; source_capture_ids optional, 0 to 20. ` +
-          `Linking a pair that is already linked changes nothing. ${DATA_WARNING}`,
+          `{type 'note'|'task', id}; kind 'related' for a plain connection, or 'depends' when a must ` +
+          `be done before b (b waits for a). Use 'depends' only when a capture says one thing must ` +
+          `happen before another; otherwise 'related'. A dependency is only between two tasks and may ` +
+          `not make a circle of tasks waiting for each other. A new link without kind is 'related'. ` +
+          `For a pair that is already linked, kind changes the link (another kind, or the reverse ` +
+          `direction) and no kind changes nothing, so a dependency a person made stays as it is. ` +
+          `source_capture_ids optional, 0 to 20. ${DATA_WARNING}`,
         inputSchema: z
           .object({
             run_id: RUN_ID,

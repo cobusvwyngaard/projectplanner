@@ -137,8 +137,9 @@ All of it is written through `mutate` (`src/worker/mutate/index.ts`):
 - `link` takes `{a, b}` for a plain connection or
   `{depends: {before, after}}` for a dependency. The Worker sorts the pair
   and works out the direction, so the caller need not know the sorted
-  order. Linking a pair that is already linked changes its direction
-  instead of making a second row.
+  order. On a pair that is already linked, `depends` (or `related: true`)
+  changes the link and plain `{a, b}` changes nothing; there is never a
+  second row.
 - `relink` changes the direction of an existing link (`related: true` for a
   plain connection, or `depends` between the same two items). The generic
   `update` action no longer applies to links, so a direction can only
@@ -152,8 +153,8 @@ All of it is written through `mutate` (`src/worker/mutate/index.ts`):
   The check reads the open dependency links, leaves out the link being
   changed (so a dependency can be turned around) and counts the edges
   written earlier in the same `mutateMany` batch, so one batch cannot make
-  a circle either. A revert that puts a direction back is checked the same
-  way.
+  a circle either. Re-linking an unlinked pair, and a revert that leaves an
+  open dependency, are checked the same way.
 - Ticking a task off is never refused, but `MutationResult` carries
   `warnings` when the task still waits for a task that is not done yet
   ("Waits for \"Book plumber\", which is not done yet."). The API and
@@ -322,8 +323,8 @@ The connector Claude talks to (SPEC sections 5 and 7) has three layers:
   old, so a dead run cannot write.
 
 Links reach Claude through the same rules: `link_items` takes an optional
-`kind` (`related`, the default, or `depends`, which says that `a` must be
-done before `b`), `get_board` returns each link as `{a, b, kind, before}`
+`kind` (`related`, or `depends`, which says that `a` must be done before
+`b`; without it a new link is related and an existing one stays as it is), `get_board` returns each link as `{a, b, kind, before}`
 with `before` the end that must be done first (null for a plain connection),
 and `update_task` returns the warnings when a task is ticked off while it
 still waits for a task that is not done yet. The tool descriptions say when

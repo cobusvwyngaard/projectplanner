@@ -245,6 +245,67 @@ describe("changing a link", () => {
   });
 });
 
+describe("the rules hold on every path", () => {
+  it("refuses to re-link an unlinked note and task as a dependency", async () => {
+    const note = await newNote("Plan the trip");
+    const task = await newTask("Book flights");
+    const linked = await mutate(db, human1, { entity: "link", action: "link", a: note, b: task });
+    await mutate(db, human1, { entity: "link", action: "unlink", id: linked.id });
+    const before = (await allEvents(db)).length;
+    await expect(
+      mutate(db, human1, { entity: "link", action: "link", depends: { before: note, after: task } }),
+    ).rejects.toThrow("A dependency can only be between two tasks.");
+    expect((await allEvents(db)).length).toBe(before);
+  });
+
+  it("refuses to re-link an unlinked pair where it would make a circle", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const third = await newTask("Pay the plumber");
+    const plain = await mutate(db, human1, { entity: "link", action: "link", a: third, b: first });
+    await mutate(db, human1, { entity: "link", action: "unlink", id: plain.id });
+    await mutate(db, human1, { entity: "link", action: "link", depends: { before: first, after: second } });
+    await mutate(db, human1, { entity: "link", action: "link", depends: { before: second, after: third } });
+    await expect(
+      mutate(db, human1, { entity: "link", action: "link", depends: { before: third, after: first } }),
+    ).rejects.toThrow("That would make a circle of tasks waiting for each other.");
+    const stored = await db.prepare("SELECT direction, archived_at FROM links WHERE id = ?").bind(plain.id).first();
+    expect(stored).toMatchObject({ direction: "none" });
+    expect(stored?.archived_at).not.toBeNull();
+  });
+
+  it("keeps a dependency when the pair is linked again without a kind", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    await mutate(db, human1, { entity: "link", action: "link", depends: { before: first, after: second } });
+    const again = await mutate(db, human1, { entity: "link", action: "link", a: second, b: first });
+    expect(again.event).toBeNull();
+    expect(again.row.direction).not.toBe("none");
+    const plain = await mutate(db, human1, { entity: "link", action: "link", a: second, b: first, related: true });
+    expect(plain.row.direction).toBe("none");
+    expect(plain.event?.action).toBe("update");
+  });
+
+  it("refuses to revert an unlink when the dependency would now close a circle", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const third = await newTask("Pay the plumber");
+    await mutate(db, human1, { entity: "link", action: "link", depends: { before: first, after: second } });
+    const middle = await mutate(db, human1, {
+      entity: "link",
+      action: "link",
+      depends: { before: second, after: third },
+    });
+    const unlinked = await mutate(db, human1, { entity: "link", action: "unlink", id: middle.id });
+    await mutate(db, human1, { entity: "link", action: "link", depends: { before: third, after: first } });
+    await expect(revertEvent(db, human1, String(unlinked.event?.id))).rejects.toThrow(
+      "That would make a circle of tasks waiting for each other.",
+    );
+    const stored = await db.prepare("SELECT archived_at FROM links WHERE id = ?").bind(middle.id).first();
+    expect(stored?.archived_at).not.toBeNull();
+  });
+});
+
 describe("finishing a task that still waits for another", () => {
   it("warns about the task it waits for", async () => {
     const plumber = await newTask("Book plumber");

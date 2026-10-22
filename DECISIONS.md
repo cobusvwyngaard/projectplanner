@@ -98,8 +98,14 @@ at the bottom of each section.
   existing action `update` with the direction in its before and after — the
   events table's action CHECK cannot be widened without rebuilding an
   append-only table (SPEC 4.1), as the Claude disconnect below also shows.
-  Linking a pair that is already linked changes its direction instead of
-  making a second row.
+  Linking a pair that is already linked never makes a second row: asking
+  for a kind (`depends`, or `related: true`) changes the link, and asking
+  for none changes nothing, so a dependency a person drew is not turned
+  into a plain connection by a later plain link (`POST /api/links` with
+  `{a, b}`, or `link_items` without `kind`). Re-linking an unlinked pair,
+  and a revert that leaves an open dependency (a direction put back, or an
+  unlink undone), follow the same two rules as a new dependency. (Added at
+  review: the branch as first written skipped both rules on those paths.)
 - **Two people may write a dependency at the same moment.** The circle check
   reads the links before the write, so two simultaneous writes can each miss
   the other's edge and leave a circle of two tasks. D1 commits one
@@ -332,8 +338,10 @@ at the bottom of each section.
   event's `before` carries the person and the client name, which is what the
   Activity line shows.
 - **Dependencies reach Claude through the tools.** `link_items` takes an
-  optional `kind`: `related` (the default, a plain connection) or `depends`,
-  which says that `a` must be done before `b`. The tool description explains
+  optional `kind`: `related` (a plain connection) or `depends`, which says
+  that `a` must be done before `b`. A new link without `kind` is related;
+  on a pair already linked, `kind` changes the link and no `kind` leaves it
+  as it is. The tool description explains
   when a dependency is the right thing; the Worker enforces the two rules
   itself, so a dependency that is not between two tasks, or one that would
   make a circle of tasks waiting for each other, is refused with nothing
@@ -375,10 +383,10 @@ at the bottom of each section.
   archived labels keep their `sort_order`. It costs one SELECT per label
   inside `mutateMany`, fine for a few dozen labels.
 - **Status codes.** 201 for creating notes, tasks and labels; 200 otherwise,
-  including `POST /api/links`, which returns the link it made or changed: a
-  pair that is already linked with the same direction gives `event: null`,
-  and one that is already linked with a different direction gives the
-  `update` event that changed it.
+  including `POST /api/links`, which returns the link it made or changed:
+  `{a, b}` for a pair that is already linked, or `depends` with the
+  direction it already has, gives `event: null`; `depends` with another
+  direction gives the `update` event that changed it.
 - **Activity filters.** `user_id` matches `actor_user_id`, so "by person"
   includes Claude acting for that person; adding `actor=human` narrows it to
   their own actions. `from`/`to` are local dates at the fixed UTC+2 offset

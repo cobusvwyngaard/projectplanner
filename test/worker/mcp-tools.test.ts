@@ -1054,6 +1054,25 @@ describe("link_items and unlink_items", () => {
     expect(await count("links")).toBe(2);
   });
 
+  it("keeps a dependency when the pair is linked again without a kind, and changes it with one", async () => {
+    const first = await newTask("Book plumber");
+    const second = await newTask("Fix the sink");
+    const run = await openRun(USER_1, { startedAt: now.toISOString() });
+    const a = { type: "task" as const, id: first };
+    const b = { type: "task" as const, id: second };
+    const direction = async () =>
+      (await db.prepare(`SELECT direction FROM links`).first<{ direction: string }>())?.direction;
+
+    await linkItems(ctx(), { run_id: run, a, b, kind: "depends" });
+    await linkItems(ctx(), { run_id: run, a, b });
+    expect(await direction()).toBe("a_to_b");
+    await linkItems(ctx(), { run_id: run, a: b, b: a, kind: "depends" });
+    expect(await direction()).toBe("b_to_a");
+    await linkItems(ctx(), { run_id: run, a, b, kind: "related" });
+    expect(await direction()).toBe("none");
+    expect(await count("links")).toBe(1);
+  });
+
   it("says which end of a dependency comes first", async () => {
     const first = await newTask("Book plumber");
     const second = await newTask("Fix the sink");

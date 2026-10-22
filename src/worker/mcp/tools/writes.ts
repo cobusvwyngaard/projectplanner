@@ -239,7 +239,7 @@ export async function linkItems(
     run_id: string;
     a: ItemRef;
     b: ItemRef;
-    /** "related" for a plain connection, "depends" when a must be done before b */
+    /** "related" for a plain connection, "depends" when a must be done before b; left out, an existing link keeps its kind */
     kind?: "related" | "depends";
     source_capture_ids?: string[];
   },
@@ -253,7 +253,9 @@ export async function linkItems(
     claudeActor(userId, input.run_id),
     input.kind === "depends"
       ? { entity: "link", action: "link", depends: { before: input.a, after: input.b }, sourceCaptureIds }
-      : { entity: "link", action: "link", a: input.a, b: input.b, sourceCaptureIds },
+      : input.kind === "related"
+        ? { entity: "link", action: "link", a: input.a, b: input.b, related: true, sourceCaptureIds }
+        : { entity: "link", action: "link", a: input.a, b: input.b, sourceCaptureIds },
     { now },
   );
   return { ok: true };

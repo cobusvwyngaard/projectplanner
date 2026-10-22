@@ -53,7 +53,14 @@ type RowChange = Exclude<MutableEntity, "link">;
 
 export type Mutation =
   | (Common & { entity: MutableEntity; action: "create"; id?: string; values: Row })
-  | (Common & { entity: "link"; action: "link"; a: ItemRef; b: ItemRef })
+  | (Common & {
+      entity: "link";
+      action: "link";
+      a: ItemRef;
+      b: ItemRef;
+      /** True turns an open dependency of this pair into a plain connection; left out, an open link keeps its kind */
+      related?: true;
+    })
   | (Common & { entity: "link"; action: "link"; depends: Dependency })
   | (Common & { entity: RowChange; action: "update"; id: string; patch: Row })
   | (Common & { entity: "link"; action: "relink"; id: string; related: true })
@@ -371,6 +378,8 @@ interface Relation {
   before: ItemRef | null;
   /** The end that waits for it (null for a plain connection) */
   after: ItemRef | null;
+  /** True when an open link of the pair keeps the kind it has (no kind was asked for) */
+  keep: boolean;
 }
 
 /** "type:id", the way the ends of a link are compared and sorted. */
@@ -383,10 +392,10 @@ function relationOf(m: Extract<Mutation, { action: "link" }>): Relation {
   if ("depends" in m) {
     const ends = canonicalPair(m.depends.before, m.depends.after);
     const direction: LinkDirection = itemKey(m.depends.before) === itemKey(ends[0]) ? "a_to_b" : "b_to_a";
-    return { ends, direction, before: m.depends.before, after: m.depends.after };
+    return { ends, direction, before: m.depends.before, after: m.depends.after, keep: false };
   }
   const ends = canonicalPair(m.a, m.b);
-  return { ends, direction: "none", before: null, after: null };
+  return { ends, direction: "none", before: null, after: null, keep: m.related !== true };
 }
 
 /** The kind of item a link points at. */
@@ -546,11 +555,18 @@ async function prepareLink(ctx: Context, m: Extract<Mutation, { action: "link" }
   }
   const existing = await ctx.readLinkPair(a, b);
   if (existing && existing.archived_at === null) {
+    // Linking a linked pair without asking for a kind changes nothing, so a
+    // dependency someone made is never turned into a plain connection by accident.
+    if (relation.keep) {
+      return { entity: "link", id: String(existing.id), row: existing, statements: [], event: null, warnings: [] };
+    }
     return changeDirection(ctx, existing, relation, m);
   }
   if (existing) {
-    // Link a pair that was unlinked earlier, with the direction asked for.
+    // Link a pair that was unlinked earlier, with the direction asked for and
+    // the same rules as a new link.
     const id = String(existing.id);
+    await checkRelation(ctx, relation, id);
     const changes: Row = { archived_at: null };
     if (String(existing.direction) !== relation.direction) changes.direction = relation.direction;
     const after: Row = { ...existing, ...changes };
@@ -613,9 +629,9 @@ async function prepareRelink(ctx: Context, m: Extract<Mutation, { action: "relin
       throw new ValidationError("A link can only be changed between the two items it joins.");
     }
     const direction: LinkDirection = itemKey(m.depends.before) === itemKey(ends[0]) ? "a_to_b" : "b_to_a";
-    relation = { ends, direction, before: m.depends.before, after: m.depends.after };
+    relation = { ends, direction, before: m.depends.before, after: m.depends.after, keep: false };
   } else {
-    relation = { ends, direction: "none", before: null, after: null };
+    relation = { ends, direction: "none", before: null, after: null, keep: false };
   }
   return changeDirection(ctx, before, relation, m);
 }
@@ -692,12 +708,17 @@ async function prepareChange(
     return { entity: m.entity, id: m.id, row: before, statements: [], event: null, warnings: [] };
   }
 
-  // A revert that puts a direction back on a link must not make a circle.
-  if (m.entity === "link" && changes.direction !== undefined && changes.direction !== "none") {
-    const ends = endsOf(before);
-    const direction = linkDirection(changes.direction);
-    const [first, second] = direction === "a_to_b" ? ends : [ends[1], ends[0]];
-    await checkRelation(ctx, { ends, direction, before: first, after: second }, m.id);
+  // A revert that leaves an open dependency (its direction put back, or an
+  // unlink undone) must follow the same rules as a new one.
+  if (m.entity === "link") {
+    const result: Row = { ...before, ...changes };
+    const reopened = changes.archived_at === null && before.archived_at !== null;
+    const direction = linkDirection(result.direction);
+    if (result.archived_at === null && direction !== "none" && (changes.direction !== undefined || reopened)) {
+      const ends = endsOf(before);
+      const [first, second] = direction === "a_to_b" ? ends : [ends[1], ends[0]];
+      await checkRelation(ctx, { ends, direction, before: first, after: second, keep: false }, m.id);
+    }
   }
 
   // Ticking a task off is never refused, but the person is told what it

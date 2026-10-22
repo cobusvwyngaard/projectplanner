@@ -51,7 +51,16 @@ Claude's `link_items` takes a `kind`, `get_board` returns the kind and
 which end comes first, and `update_task` returns the warning. What is left
 is the app: the arrow on the board, the words in the List view and the item
 panel, and the way to reverse a dependency or turn it back into a plain
-connection.
+connection. Merged on 2026-10-23 after review, with fixes: re-linking an
+unlinked pair and reverting an unlink now follow the two rules, and linking
+a pair again without a kind no longer turns a dependency into a plain link.
+
+**Owner, 2026-10-23:** on the live planner, the direction of a dependency
+between tasks does not seem to work and is not clearly shown. Expected at
+that point: until the Worker part was merged, nothing for dependencies was
+live, and the app part (arrows on the board, "Waiting for …" on cards and in
+lists, reversing a dependency on the connection or in the panel) has not
+been built yet. Check this again once the app part is merged.
 
 ## Done
 

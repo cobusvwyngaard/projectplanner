@@ -43,57 +43,20 @@ Details (proposed; owner decisions marked):
 
 ### 3. The phrase page should let you see the phrase while typing
 
-Reported 2026-10-22. The sign-in field is a password field, so a typing
-mistake in a long phrase cannot be seen.
-
-Wanted: a "Show phrase" control next to the field that switches it between
-hidden and visible, hidden by default.
-
-Notes for whoever builds it:
-- The sign-in page is deliberately self-contained: a worker test asserts it
-  loads no scripts or other files, and the CSP allows scripts only from
-  'self'. A show/hide toggle needs a few lines of script, so serve them as one
-  small same-origin file (for example /login.js, public like /favicon.svg)
-  and adjust that test to allow exactly that file; no inline script.
-- The button has an accessible name ("Show phrase" / "Hide phrase") and
-  aria-pressed; the field keeps autocomplete="current-password" so password
-  managers still fill it. Without JavaScript the page still works (hidden).
-- Apply the same control wherever a phrase is typed later (Phase 6 admin).
+Done 2026-10-23 in `6fff988`: the sign-in page serves `/login.js` as a
+public, same-origin script (the button is hidden without JS) that toggles the
+phrase field between `password` and `text`, updates its label and
+`aria-pressed`, and keeps focus and the cursor; the worker tests and the auth
+Playwright test cover the behaviour.
 
 ### 4. A pink colour scheme
 
-Reported 2026-10-22. The owner wants the planner on a pink base instead of
-the current green and beige.
-
-Palette (chosen by the project manager; every text pair checked at 4.5:1 or
-better, board lines at 3:1 or better, in light and dark):
-
-| Token | Light | Dark |
-|---|---|---|
-| --bg | #fbf1f4 | #1a1418 |
-| --surface | #ffffff | #241c21 |
-| --surface-2 | #fdf6f8 | #1f181c |
-| --surface-hover | #f7e6ec | #30262c |
-| --text | #241a1f | #f1e8ec |
-| --muted | #6b5a62 | #b7a5ad |
-| --border | #efd9e1 | #3a2f35 |
-| --border-strong | #dcbcc8 | #54454d |
-| --field | #fffafc | #1c1519 |
-| --accent | #b0306a | #f28cb8 |
-| --accent-hover | #962858 | #f7a8ca |
-| --accent-text | #ffffff | #2a0a18 |
-| --accent-soft | #fbe3ee | #4a2236 |
-| --accent-soft-text | #7f1f4b | #f8c4dc |
-| --focus | rgba(176, 48, 106, 0.5) | rgba(242, 140, 184, 0.55) |
-| --chip-bg | #f3e4ea | #2f262b |
-| --chip-text | #4a3a41 | #e0d2d8 |
-| board background | #f6e9ee | #140f12 |
-| board dots | #e2c6d1 | #3a2d34 |
-| board lines | #9c7d89 | #94808a |
-
-Danger/red, amber, warning, the Claude purple and the yellow notes stay as
-they are, so warnings and "from outside" marks remain distinct from the pink.
-The app icons were regenerated on the pink accent by the project manager.
+Done 2026-10-23 in `fb7f4b5`: applied the chosen palette to the app styles,
+the board canvas tokens, the sign-in page tokens, the offline service worker
+page, `static/manifest.webmanifest`, the `theme-color` meta tags and the test
+fixtures; bumped the service worker version to pick up the change; replaced
+the hard-coded green/beige tokens found with pink tokens while leaving
+danger/red, amber/warn, Claude purple and yellow notes unchanged.
 
 ## Done
 

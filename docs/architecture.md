@@ -324,7 +324,10 @@ stop working.
   a plain 200); pages and `/api` always go to the network, and a navigation
   with no network answers with a plain offline page that carries no planner
   data. Bump its `VERSION` when the rules change; the worker serves these
-  files as public with no data (`src/worker/app.ts`).
+  files as public with no data (`src/worker/app.ts`). `/login.js` is a public
+  same-origin script the sign-in page loads to toggle the phrase field. The
+  colour tokens live in `src/app/styles.css` and `src/app/board/board.css`,
+  and the sign-in page uses matching tokens in `src/worker/auth/html.ts`.
 - Board shortcuts (`src/app/board/shortcuts.ts`): one `SHORTCUTS` table feeds
   the key handling, the **?** dialog (`ShortcutsDialog.tsx`, a native
   `<dialog>`) and the unit tests. N, T, F, +, -, 0, Esc and ? act on the

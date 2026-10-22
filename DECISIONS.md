@@ -159,7 +159,13 @@ at the bottom of each section.
 - **Caching.** `Cache-Control: no-store` for HTML, `/api`, redirects and error
   pages; `public, max-age=31536000, immutable` for 200s under `/assets/*`
   (still behind the session check); `no-cache` for the public files
-  (`/manifest.webmanifest`, `/sw.js`, `/favicon.svg`, `/icons/*`).
+  (`/manifest.webmanifest`, `/sw.js`, `/login.js`, `/favicon.svg`, `/icons/*`).
+- **Sign-in phrase toggle.** The phrase page loads exactly one small
+  same-origin script (`/login.js`) to switch the field between `password`
+  and `text`, update its label and `aria-pressed`, and keep focus and the
+  cursor; the button is hidden without JavaScript, `autocomplete` and field
+  names stay intact, and no inline script is used because the CSP allows
+  scripts only from `'self'`.
 - **Missing public files are a 404.** The assets' single-page fallback
   answers any missing path with `index.html`, so a public path whose answer
   is HTML (none of those files is) becomes a 404 page instead of the app

@@ -4,21 +4,21 @@
 
 :root {
   color-scheme: light dark;
-  --bg: #f4f2ec;
+  --bg: #fbf1f4;
   --surface: #ffffff;
-  --surface-2: #f8f7f3;
-  --surface-hover: #f1efe8;
-  --text: #1d2025;
-  --muted: #5a606a;
-  --border: #e2ded3;
-  --border-strong: #cbc6b8;
-  --field: #fdfcfa;
-  --accent: #2b6b5a;
-  --accent-hover: #235a4b;
+  --surface-2: #fdf6f8;
+  --surface-hover: #f7e6ec;
+  --text: #241a1f;
+  --muted: #6b5a62;
+  --border: #efd9e1;
+  --border-strong: #dcbcc8;
+  --field: #fffafc;
+  --accent: #b0306a;
+  --accent-hover: #962858;
   --accent-text: #ffffff;
-  --accent-soft: #e2efe9;
-  --accent-soft-text: #1f5446;
-  --focus: rgba(43, 107, 90, 0.5);
+  --accent-soft: #fbe3ee;
+  --accent-soft-text: #7f1f4b;
+  --focus: rgba(176, 48, 106, 0.5);
   --danger: #b42318;
   --danger-hover: #9a1d13;
   --danger-text: #8a2216;
@@ -29,8 +29,8 @@
   --amber-text: #7a4a00;
   --red-bg: #fde2df;
   --red-text: #a1231a;
-  --chip-bg: #eceae3;
-  --chip-text: #3d4249;
+  --chip-bg: #f3e4ea;
+  --chip-text: #4a3a41;
   --claude-bg: #ece8fb;
   --claude-text: #4c2f99;
   --note-default: #fde68a;
@@ -46,21 +46,21 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141619;
-    --surface: #1d2024;
-    --surface-2: #191c1f;
-    --surface-hover: #272b30;
-    --text: #e9e7e2;
-    --muted: #a3a9b1;
-    --border: #30343a;
-    --border-strong: #454a52;
-    --field: #16191c;
-    --accent: #6cc4a9;
-    --accent-hover: #86d2ba;
-    --accent-text: #0d1b16;
-    --accent-soft: #1d3b32;
-    --accent-soft-text: #a6e3cf;
-    --focus: rgba(108, 196, 169, 0.55);
+    --bg: #1a1418;
+    --surface: #241c21;
+    --surface-2: #1f181c;
+    --surface-hover: #30262c;
+    --text: #f1e8ec;
+    --muted: #b7a5ad;
+    --border: #3a2f35;
+    --border-strong: #54454d;
+    --field: #1c1519;
+    --accent: #f28cb8;
+    --accent-hover: #f7a8ca;
+    --accent-text: #2a0a18;
+    --accent-soft: #4a2236;
+    --accent-soft-text: #f8c4dc;
+    --focus: rgba(242, 140, 184, 0.55);
     --danger: #c4372a;
     --danger-hover: #d64a3c;
     --danger-text: #f5b8ae;
@@ -71,8 +71,8 @@
     --amber-text: #fcd58a;
     --red-bg: #4f1e19;
     --red-text: #fdbdb3;
-    --chip-bg: #2b2f35;
-    --chip-text: #d5d8dd;
+    --chip-bg: #2f262b;
+    --chip-text: #e0d2d8;
     --claude-bg: #2d2652;
     --claude-text: #d3c7ff;
     --note-default: #f2d675;

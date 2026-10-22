@@ -5,7 +5,7 @@
 // content. Offline, a navigation answers with a plain page that says so.
 // No offline sync in v1. Bump VERSION whenever the rules below change.
 
-const VERSION = "planner-v1";
+const VERSION = "planner-v2";
 const ASSET_CACHE = VERSION + "-assets";
 
 // Paths that always go straight to the network, in both directions.
@@ -20,8 +20,8 @@ const OFFLINE_PAGE = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>You are offline · Shared Planner</title>
 <style>
-body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: #f4f2ec; color: #1d2025; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { width: 100%; max-width: 400px; padding: 32px 24px; border: 1px solid #dcd8cd; border-radius: 18px; background: #ffffff; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: #fbf1f4; color: #1d2025; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { width: 100%; max-width: 400px; padding: 32px 24px; border: 1px solid #efd9e1; border-radius: 18px; background: #ffffff; }
 h1 { margin: 0 0 8px; font-size: 1.35rem; }
 p { margin: 0; }
 </style>

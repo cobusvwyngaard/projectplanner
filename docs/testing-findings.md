@@ -41,26 +41,13 @@ Details (proposed; owner decisions marked):
   another) versus a plain link, and get_board returns the kind and
   direction. Reverting and history work for the new links as for the old.
 
-### 3. The phrase page should let you see the phrase while typing
-
-Reported 2026-10-22. The sign-in field is a password field, so a typing
-mistake in a long phrase cannot be seen.
-
-Wanted: a "Show phrase" control next to the field that switches it between
-hidden and visible, hidden by default.
-
-Notes for whoever builds it:
-- The sign-in page is deliberately self-contained: a worker test asserts it
-  loads no scripts or other files, and the CSP allows scripts only from
-  'self'. A show/hide toggle needs a few lines of script, so serve them as one
-  small same-origin file (for example /login.js, public like /favicon.svg)
-  and adjust that test to allow exactly that file; no inline script.
-- The button has an accessible name ("Show phrase" / "Hide phrase") and
-  aria-pressed; the field keeps autocomplete="current-password" so password
-  managers still fill it. Without JavaScript the page still works (hidden).
-- Apply the same control wherever a phrase is typed later (Phase 6 admin).
+## Done
 
 ### 4. A pink colour scheme
+
+Done 2026-10-23 in `fb7f4b5`: the palette below is applied to the app,
+the board, the sign-in page, the offline page, the manifest and the
+theme-color tags; the service worker is `planner-v2` so phones pick it up.
 
 Reported 2026-10-22. The owner wants the planner on a pink base instead of
 the current green and beige.
@@ -95,7 +82,30 @@ Danger/red, amber, warning, the Claude purple and the yellow notes stay as
 they are, so warnings and "from outside" marks remain distinct from the pink.
 The app icons were regenerated on the pink accent by the project manager.
 
-## Done
+### 3. The phrase page should let you see the phrase while typing
+
+Done 2026-10-23 in `6fff988`: a "Show phrase" button beside the field
+switches it between hidden and visible ("Hide phrase", `aria-pressed`),
+keeping the focus and the cursor. Its script is one public same-origin file,
+`/login.js`; without JavaScript the button stays hidden and the page works as
+before.
+
+Reported 2026-10-22. The sign-in field is a password field, so a typing
+mistake in a long phrase cannot be seen.
+
+Wanted: a "Show phrase" control next to the field that switches it between
+hidden and visible, hidden by default.
+
+Notes for whoever builds it:
+- The sign-in page is deliberately self-contained: a worker test asserts it
+  loads no scripts or other files, and the CSP allows scripts only from
+  'self'. A show/hide toggle needs a few lines of script, so serve them as one
+  small same-origin file (for example /login.js, public like /favicon.svg)
+  and adjust that test to allow exactly that file; no inline script.
+- The button has an accessible name ("Show phrase" / "Hide phrase") and
+  aria-pressed; the field keeps autocomplete="current-password" so password
+  managers still fill it. Without JavaScript the page still works (hidden).
+- Apply the same control wherever a phrase is typed later (Phase 6 admin).
 
 ### 1. Tasks from outside senders must stand out in "Not on the board"
 

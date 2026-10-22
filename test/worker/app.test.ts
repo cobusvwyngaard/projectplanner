@@ -71,6 +71,14 @@ describe("without a session", () => {
     expectSecurityHeaders(icon);
   });
 
+  it("serves the phrase toggle script without a session", async () => {
+    const res = await call("/login.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("javascript");
+    expect(res.headers.get("Cache-Control")).toBe("no-cache");
+    expectSecurityHeaders(res);
+  });
+
   it("serves the manifest, the service worker and the app icons with the right content types", async () => {
     const manifest = await call("/manifest.webmanifest");
     expect(manifest.status).toBe(200);
@@ -96,8 +104,8 @@ describe("without a session", () => {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#f4f2ec",
-      theme_color: "#2b6b5a",
+      background_color: "#fbf1f4",
+      theme_color: "#b0306a",
       icons: [
         { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
         { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

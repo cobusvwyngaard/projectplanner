@@ -129,8 +129,12 @@ Your review, every time:
   wrangler dry run), `npx playwright test` (Playwright 1.56.1; starts
   `scripts/e2e-server.mjs`). npm 10 has an install bug here; use
   `npx npm@11 install` when adding packages, `npm ci` otherwise.
-- Baselines at the last merge (7611e93): 656 tests in 44 files, 47
+- Baselines at the last merge (614a35d): 657 tests in 44 files, 48
   Playwright tests.
+- The project manager's working branch is `claude/project-manager`. A push
+  to `main` reaches the live site in about two minutes (measured
+  2026-10-22). Commit trailers name no model: `Co-Authored-By: Claude
+  <noreply@anthropic.com>`.
 - Documents: SPEC.md (what), docs/architecture.md (where and how),
   DECISIONS.md (why), SETUP.md (owner's operating guide),
   docs/testing-findings.md (owner's findings: open and done).
@@ -142,8 +146,12 @@ Your review, every time:
 Built and merged: Phases 1 to 5 of SPEC.md (board, list, captures and
 transcription, Inbox, Claude connector with 13 tools, Claude connections in
 Settings, email capture with attachments, email addresses per person, the
-home-screen app, board keyboard shortcuts) and findings item 1 (tasks from
-outside senders flagged).
+home-screen app, board keyboard shortcuts), findings item 1 (tasks from
+outside senders flagged) and findings items 3 and 4 (show the phrase while
+typing, the pink colour scheme; merged 2026-10-22 in 614a35d).
+
+The project manager moved to a new Claude account on 2026-10-22; the new
+session proved it can push to `main` and that Cloudflare deploys it.
 
 Live testing by the owner so far:
 - Email tests 1 to 4 passed (accepted, shown, attachments, outside senders
@@ -171,9 +179,18 @@ scheduled-tasks page.
 
 Run in this order; each OpenCode prompt starts from the latest `main`.
 
-1. **Prompt A: show the phrase while typing, and the pink colour scheme**
-   (findings items 3 and 4). Below.
-2. **Prompt B: task dependencies, Worker and Claude** (findings item 2). Below.
+1. Done: Prompt A (findings items 3 and 4), merged in 614a35d.
+2. **Task dependencies, Worker and Claude** (findings item 2). A branch
+   `opencode/dependencies-worker` (dae3d7d, 21 Oct, based on 43fa823) already
+   exists from an earlier version of Prompt B; it was not merged and the
+   reason is not recorded. On its own base: tsc, build and 688 tests in 45
+   files pass. Known gaps against Prompt B below: the `link_items`
+   description still says relinking "changes nothing", and the "use depends
+   only when…" and "tell the people in the run summary" wording is missing.
+   It changes a direction with an internal `relink` action that writes an
+   `update` event (documented in DECISIONS.md), instead of making
+   `direction` writable. Review it fully and fix or correct it rather than
+   pasting Prompt B, whose branch name would collide with it.
 3. **Prompt C: task dependencies, app** (findings item 2). Below.
 4. **Prompt D: final clean-up.** Below.
 5. **The project manager writes HANDOFF.md and FEATURES.md** (not

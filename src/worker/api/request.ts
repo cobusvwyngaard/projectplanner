@@ -57,7 +57,9 @@ export function rowAs<K extends RowKind>(_kind: K, result: MutationResult): RowT
 }
 
 export function mutationResponse<K extends RowKind>(kind: K, result: MutationResult): MutationResponse<RowTypes[K]> {
-  return { row: rowAs(kind, result), event: result.event };
+  const response: MutationResponse<RowTypes[K]> = { row: rowAs(kind, result), event: result.event };
+  if (result.warnings.length > 0) response.warnings = result.warnings;
+  return response;
 }
 
 /** Body of POST /api/events/:id/revert and /api/runs/:id/revert. */
@@ -83,5 +85,7 @@ export async function taskResponse(db: D1Database, result: MutationResult): Prom
   const views = await taskViews(db, [row]);
   const view = views[0];
   if (view === undefined) throw new Error("taskViews did not return the task");
-  return { row: view, event: result.event };
+  const response: MutationResponse<TaskView> = { row: view, event: result.event };
+  if (result.warnings.length > 0) response.warnings = result.warnings;
+  return response;
 }

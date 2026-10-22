@@ -66,12 +66,23 @@ export interface ItemRef {
   id: Id;
 }
 
+/**
+ * How the two ends of a link relate. The ends are stored in canonical order,
+ * so the direction says which end comes first:
+ * - "none": a plain connection, the two items belong together;
+ * - "a_to_b": the a end must be done first, b waits for a;
+ * - "b_to_a": the b end must be done first, a waits for b.
+ */
+export type LinkDirection = "none" | "a_to_b" | "b_to_a";
+
 export interface Link {
   id: Id;
   a_type: ItemType;
   a_id: Id;
   b_type: ItemType;
   b_id: Id;
+  /** Only ever a direction between two tasks */
+  direction: LinkDirection;
   created_at: Timestamp;
   archived_at: Timestamp | null;
 }

@@ -80,13 +80,14 @@ export const ENTITIES: Readonly<Record<MutableEntity, EntitySpec>> = {
   link: {
     table: "links",
     key: "id",
-    columns: ["id", "a_type", "a_id", "b_type", "b_id", "created_at", "archived_at"],
+    columns: ["id", "a_type", "a_id", "b_type", "b_id", "direction", "created_at", "archived_at"],
     hidden: NONE,
     touch: null,
     archive: "archived_at",
-    // Links are made with action 'link' and removed with 'unlink'; no field updates.
+    // Links are made with action 'link' and removed with 'unlink'; their
+    // direction is changed with action 'relink', which checks the rules.
     writable: { human: NONE, claude: NONE, system: NONE },
-    defaults: { a_type: "note", a_id: "", b_type: "note", b_id: "", archived_at: null },
+    defaults: { a_type: "note", a_id: "", b_type: "note", b_id: "", direction: "none", archived_at: null },
     createOnly: NONE,
     creators: ["human", "claude"],
   },

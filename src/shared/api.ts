@@ -37,6 +37,8 @@ export interface ApiErrorBody {
 export interface MutationResponse<T> {
   row: T;
   event: PlannerEvent | null;
+  /** Things worth telling the person about, such as a task ticked off too early */
+  warnings?: string[];
 }
 
 // --- Bootstrap and change feed ---------------------------------------------
@@ -126,11 +128,35 @@ export interface UpdateTaskRequest extends Partial<CreateTaskRequest> {
 // POST /api/tasks/:id/complete, /reopen, /archive, /unarchive
 //   -> MutationResponse<NoteView | TaskView>
 
-/** POST /api/links -> MutationResponse<Link> */
-export interface CreateLinkRequest {
-  a: ItemRef;
-  b: ItemRef;
-}
+/**
+ * POST /api/links -> MutationResponse<Link>
+ * A plain connection joins two items; a dependency says that one task must be
+ * done before the other waits for it.
+ */
+export type CreateLinkRequest =
+  | {
+      a: ItemRef;
+      b: ItemRef;
+    }
+  | {
+      /** The task that must be done first, and the task that waits for it */
+      depends: { before: ItemRef; after: ItemRef };
+    };
+
+/**
+ * PATCH /api/links/:id -> MutationResponse<Link>
+ * A link's direction is the only thing that changes: a dependency becomes a
+ * plain connection, or the other way round.
+ */
+export type UpdateLinkRequest =
+  | {
+      /** "none" turns a dependency back into a plain connection */
+      direction: "none";
+    }
+  | {
+      /** The task that must be done first, and the task that waits for it */
+      depends: { before: ItemRef; after: ItemRef };
+    };
 // POST /api/links/:id/unlink -> MutationResponse<Link>
 
 // --- Labels, users, settings ----------------------------------------------

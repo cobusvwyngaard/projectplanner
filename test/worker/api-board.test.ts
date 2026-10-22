@@ -422,3 +422,142 @@ describe("links", () => {
     expect((await allEvents()).filter((e) => e.entity_type === "link")).toHaveLength(0);
   });
 });
+
+describe("dependencies between tasks", () => {
+  it("links two tasks so that one waits for the other", async () => {
+    const first = await createTask({ title: "Book plumber" });
+    const second = await createTask({ title: "Fix the sink" });
+    const linked = await ok(
+      api.post<MutationResponse<Link>>("/api/links", {
+        depends: { before: { type: "task", id: first.row.id }, after: { type: "task", id: second.row.id } },
+      }),
+    );
+    expect(linked.row.direction).toBe("a_to_b");
+    expect(linked.event).toMatchObject({ action: "link", after: { direction: "a_to_b" } });
+  });
+
+  it("says which end waits, whichever order the dependency was asked in", async () => {
+    const first = await createTask({ title: "Book plumber" });
+    const second = await createTask({ title: "Fix the sink" });
+    const linked = await ok(
+      api.post<MutationResponse<Link>>("/api/links", {
+        depends: { before: { type: "task", id: second.row.id }, after: { type: "task", id: first.row.id } },
+      }),
+    );
+    expect(linked.row).toMatchObject({
+      a_type: "task",
+      a_id: first.row.id,
+      b_type: "task",
+      b_id: second.row.id,
+      direction: "b_to_a",
+    });
+  });
+
+  it("refuses a dependency that is not between two tasks", async () => {
+    const note = await createNote();
+    const task = await createTask();
+    const error = await fails(
+      api.post("/api/links", {
+        depends: { before: { type: "note", id: note.row.id }, after: { type: "task", id: task.row.id } },
+      }),
+      400,
+    );
+    expect(error.message).toBe("A dependency can only be between two tasks.");
+  });
+
+  it("refuses a circle of tasks waiting for each other", async () => {
+    const one = await createTask({ title: "one" });
+    const two = await createTask({ title: "two" });
+    const three = await createTask({ title: "three" });
+    await ok(
+      api.post("/api/links", {
+        depends: { before: { type: "task", id: one.row.id }, after: { type: "task", id: two.row.id } },
+      }),
+    );
+    await ok(
+      api.post("/api/links", {
+        depends: { before: { type: "task", id: two.row.id }, after: { type: "task", id: three.row.id } },
+      }),
+    );
+    const error = await fails(
+      api.post("/api/links", {
+        depends: { before: { type: "task", id: three.row.id }, after: { type: "task", id: one.row.id } },
+      }),
+      400,
+    );
+    expect(error.message).toBe("That would make a circle of tasks waiting for each other.");
+  });
+
+  it("changes the direction of a link", async () => {
+    const first = await createTask({ title: "Book plumber" });
+    const second = await createTask({ title: "Fix the sink" });
+    const linked = await ok(
+      api.post<MutationResponse<Link>>("/api/links", {
+        a: { type: "task", id: first.row.id },
+        b: { type: "task", id: second.row.id },
+      }),
+    );
+    expect(linked.row.direction).toBe("none");
+    const changed = await ok(
+      api.patch<MutationResponse<Link>>(`/api/links/${linked.row.id}`, {
+        depends: { before: { type: "task", id: first.row.id }, after: { type: "task", id: second.row.id } },
+      }),
+    );
+    expect(changed.row.direction).toBe("a_to_b");
+    expect(changed.event).toMatchObject({ action: "update", before: { direction: "none" }, after: { direction: "a_to_b" } });
+  });
+
+  it("turns a dependency back into a plain connection", async () => {
+    const first = await createTask({ title: "Book plumber" });
+    const second = await createTask({ title: "Fix the sink" });
+    const linked = await ok(
+      api.post<MutationResponse<Link>>("/api/links", {
+        depends: { before: { type: "task", id: first.row.id }, after: { type: "task", id: second.row.id } },
+      }),
+    );
+    const plain = await ok(api.patch<MutationResponse<Link>>(`/api/links/${linked.row.id}`, { direction: "none" }));
+    expect(plain.row.direction).toBe("none");
+    expect(plain.event).toMatchObject({ action: "update", before: { direction: "a_to_b" }, after: { direction: "none" } });
+  });
+
+  it("refuses a link that does not join the two items", async () => {
+    const first = await createTask({ title: "Book plumber" });
+    const second = await createTask({ title: "Fix the sink" });
+    const third = await createTask({ title: "Call the plumber" });
+    const linked = await ok(
+      api.post<MutationResponse<Link>>("/api/links", {
+        a: { type: "task", id: first.row.id },
+        b: { type: "task", id: second.row.id },
+      }),
+    );
+    const error = await fails(
+      api.patch(`/api/links/${linked.row.id}`, {
+        depends: { before: { type: "task", id: first.row.id }, after: { type: "task", id: third.row.id } },
+      }),
+      400,
+    );
+    expect(error.message).toBe("A link can only be changed between the two items it joins.");
+    await fails(api.patch("/api/links/NO-SUCH-LINK", { direction: "none" }), 404);
+  });
+
+  it("tells the person what a task still waits for when it is ticked off", async () => {
+    const plumber = await createTask({ title: "Book plumber" });
+    const sink = await createTask({ title: "Fix the sink" });
+    await ok(
+      api.post("/api/links", {
+        depends: { before: { type: "task", id: plumber.row.id }, after: { type: "task", id: sink.row.id } },
+      }),
+    );
+    const done = await ok(api.post<MutationResponse<TaskView>>(`/api/tasks/${sink.row.id}/complete`));
+    expect(done.warnings).toEqual(['Waits for "Book plumber", which is not done yet.']);
+    await ok(api.post(`/api/tasks/${plumber.row.id}/complete`));
+    const again = await ok(api.post<MutationResponse<TaskView>>(`/api/tasks/${sink.row.id}/complete`));
+    expect(again.warnings).toBeUndefined();
+  });
+
+  it("says nothing when there is nothing to say", async () => {
+    const task = await createTask({ title: "Book flights" });
+    const done = await ok(api.post<MutationResponse<TaskView>>(`/api/tasks/${task.row.id}/complete`));
+    expect(done.warnings).toBeUndefined();
+  });
+});

@@ -57,9 +57,55 @@ at the bottom of each section.
   were read, and a `write_guard` insert whose trigger aborts the transaction
   if it missed. The same mechanism checks that a Claude run is open and makes
   `start_run`'s claim all-or-nothing.
-- **Links are stored once per pair.** Endpoints are sorted (`type:id`) before
-  storing, so drawing A→B and B→A is the same link. Unlinking archives the
-  row; linking the pair again un-archives it (action `link`).
+- **Links are stored once per pair, with a direction.** Endpoints are sorted
+  (`type:id`) before storing, so drawing A→B and B→A is the same link.
+  Unlinking archives the row; linking the pair again un-archives it (action
+  `link`). The row keeps that canonical order and gains a `direction` column
+  (`none`, `a_to_b`, `b_to_a`, added by `migrations/0003_link_direction.sql`
+  with a CHECK) that says which end comes first: `none` is a plain
+  connection, `a_to_b` means the a end must be done first and b waits for a,
+  `b_to_a` the other way round. A direction column was chosen over swapped
+  ends (`a_before`, `b_before`) because the ends are sorted already: the
+  direction is one small value on the row that is there, while swapping the
+  ends would need a second sort key next to the id sort the row already
+  uses, or a second row for the same pair. Every link that exists today is
+  a plain connection.
+- **A dependency is only between two tasks, and mutate says so.** The rule
+  lives in the write path, not in the routes, so the API, Claude and the app
+  get the same answer: a dependency with a note at one end is refused ("A
+  dependency can only be between two tasks."), and a link can only be
+  changed between the two items it joins ("A link can only be changed
+  between the two items it joins.").
+- **A circle of tasks waiting for each other is refused.** The open
+  dependency links are read before the new edge is written, and it is
+  refused when the waiting task can already reach the one that must come
+  first ("That would make a circle of tasks waiting for each other."). The
+  link being changed is left out of the check, so a dependency can be turned
+  around, and the edges written earlier in the same `mutateMany` batch count
+  too, so one batch cannot make a circle either. A revert that puts a
+  direction back is checked the same way.
+- **Ticking a task off too early only warns.** The owner's decision
+  (2026-10-21): completing a task whose prerequisite is still open is never
+  refused. `MutationResult` carries `warnings` ("Waits for \"Book plumber\",
+  which is not done yet."), and the API and Claude's `update_task` pass them
+  on. The write goes through as asked.
+- **A link's direction changes with the `relink` action, not `update`.** The
+  generic `update` action does not apply to a link at all (its type leaves
+  links out), so the direction can only change through `relink`, and that
+  changes nothing else: to `none` (a plain connection), or to a dependency
+  between the same two items. A revert can still put a direction back, and
+  it is checked for circles like every other write. The event is the
+  existing action `update` with the direction in its before and after — the
+  events table's action CHECK cannot be widened without rebuilding an
+  append-only table (SPEC 4.1), as the Claude disconnect below also shows.
+  Linking a pair that is already linked changes its direction instead of
+  making a second row.
+- **Two people may write a dependency at the same moment.** The circle check
+  reads the links before the write, so two simultaneous writes can each miss
+  the other's edge and leave a circle of two tasks. D1 commits one
+  transaction at a time, so the window is small, and a later dependency that
+  would close a circle again is refused, so the circle cannot grow. With two
+  people this is accepted, as it is for label names.
 - **Event diffs hold only changed fields**, except creations, whose `after`
   is the full row. `updated_at` and `captures.transcript_json` are never in
   event JSON.
@@ -285,6 +331,16 @@ at the bottom of each section.
   `entity_type` has no constraint, so the new kind is a plain string. The
   event's `before` carries the person and the client name, which is what the
   Activity line shows.
+- **Dependencies reach Claude through the tools.** `link_items` takes an
+  optional `kind`: `related` (the default, a plain connection) or `depends`,
+  which says that `a` must be done before `b`. The tool description explains
+  when a dependency is the right thing; the Worker enforces the two rules
+  itself, so a dependency that is not between two tasks, or one that would
+  make a circle of tasks waiting for each other, is refused with nothing
+  written. `get_board` returns each link as `{a, b, kind, before}`, where
+  `before` is the end that must be done first (null for a plain connection),
+  and `update_task` returns the warnings when a task is ticked off while it
+  still waits for a task that is not done yet.
 
 ## Board API
 
@@ -319,8 +375,10 @@ at the bottom of each section.
   archived labels keep their `sort_order`. It costs one SELECT per label
   inside `mutateMany`, fine for a few dozen labels.
 - **Status codes.** 201 for creating notes, tasks and labels; 200 otherwise,
-  including `POST /api/links`, which returns the existing link with
-  `event: null` when the pair is already linked.
+  including `POST /api/links`, which returns the link it made or changed: a
+  pair that is already linked with the same direction gives `event: null`,
+  and one that is already linked with a different direction gives the
+  `update` event that changed it.
 - **Activity filters.** `user_id` matches `actor_user_id`, so "by person"
   includes Claude acting for that person; adding `actor=human` narrows it to
   their own actions. `from`/`to` are local dates at the fixed UTC+2 offset
@@ -347,6 +405,20 @@ at the bottom of each section.
 - **`apiRouter` sets `onError(jsonError)` itself**, so its routes answer with
   JSON errors wherever it is mounted; `/api/sessions` is mounted next to it
   in `app.ts`.
+- **Link bodies are a strict object with a refinement, not a union.**
+  `POST /api/links` takes `{a, b}` for a plain connection or
+  `{depends: {before, after}}` for a dependency, and `PATCH /api/links/:id`
+  takes `{direction: "none"}` to turn a dependency back into a plain
+  connection or `{depends: {before, after}}` to change which end comes
+  first. Each body is one `z.strictObject` with optional fields and a
+  `.refine`, because a `z.union` would throw the friendly per-field message
+  ("b.type: An item is either a note or a task.") away and answer with a
+  generic "no union matched" instead.
+- **A mutation response carries warnings.** `MutationResponse` has an
+  optional `warnings` list, present only when there is something to say:
+  ticking a task off while it still waits for an open task says so ("Waits
+  for \"Book plumber\", which is not done yet."). The task is written as
+  asked either way.
 
 ## Front end
 

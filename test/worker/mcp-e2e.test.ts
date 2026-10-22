@@ -3,7 +3,8 @@
 // writes come out of the database attributed to the right person.
 
 import { beforeEach, describe, expect, it } from "vitest";
-import type { BootstrapResponse } from "../../src/shared/api";
+import type { BootstrapResponse, MutationResponse } from "../../src/shared/api";
+import type { TaskView } from "../../src/shared/types";
 import { ulid } from "../../src/worker/lib/ulid";
 import { SYSTEM_ACTOR } from "../../src/worker/mutate/actor";
 import { mutate } from "../../src/worker/mutate/index";
@@ -295,6 +296,54 @@ describe("an email capture and who may be assigned from it", () => {
     const writes = (await boardEvents()).filter((e) => e.entity_type === "task" && e.entity_id === task.id);
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ actor_kind: "claude", run_id: started.run_id, source_capture_ids: [email] });
+  });
+});
+
+describe("task dependencies", () => {
+  it("links two tasks so that one waits for the other, and refuses a circle", async () => {
+    const api = asUser(USER_1);
+    const first = await ok(api.post<MutationResponse<TaskView>>("/api/tasks", { title: "Book plumber" }));
+    const second = await ok(api.post<MutationResponse<TaskView>>("/api/tasks", { title: "Fix the sink" }));
+    const third = await ok(api.post<MutationResponse<TaskView>>("/api/tasks", { title: "Call the plumber" }));
+    const mcp = await session(PHRASE_1);
+    const started = (await mcp.callTool("start_run", { intent: "Say what has to be done first", capture_ids: [] })).json as {
+      run_id: string;
+    };
+
+    const linked = await mcp.callTool("link_items", {
+      run_id: started.run_id,
+      a: { type: "task", id: first.row.id },
+      b: { type: "task", id: second.row.id },
+      kind: "depends",
+    });
+    expect(linked.isError).toBeFalsy();
+
+    const board = (await mcp.callTool("get_board", {})).json as {
+      links: { kind: string; before: { id: string } | null }[];
+    };
+    expect(board.links).toEqual([
+      {
+        a: { type: "task", id: first.row.id },
+        b: { type: "task", id: second.row.id },
+        kind: "depends",
+        before: { type: "task", id: first.row.id },
+      },
+    ]);
+
+    await mcp.callTool("link_items", {
+      run_id: started.run_id,
+      a: { type: "task", id: second.row.id },
+      b: { type: "task", id: third.row.id },
+      kind: "depends",
+    });
+    const circle = await mcp.callTool("link_items", {
+      run_id: started.run_id,
+      a: { type: "task", id: third.row.id },
+      b: { type: "task", id: first.row.id },
+      kind: "depends",
+    });
+    expect(circle.isError).toBe(true);
+    expect(circle.text).toContain("That would make a circle of tasks waiting for each other.");
   });
 });
 

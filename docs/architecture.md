@@ -116,6 +116,53 @@ Rules for all code:
   `transcribe_attempts`, `transcribe_next_at` only).
 - Reverts: `src/worker/mutate/revert.ts` (`revertEvent`, `revertRun`).
 
+## Links
+
+A link joins two items. The `links` table stores one row per pair: the ends
+are sorted (`type:id`) before storing, so A→B and B→A are the same link, and
+the row carries a `direction` column (`migrations/0003_link_direction.sql`)
+that says how the two ends relate:
+
+- `none` — a plain connection: the two items belong together;
+- `a_to_b` — the a end must be done first, b waits for a;
+- `b_to_a` — the b end must be done first, a waits for b.
+
+The direction is a value on the row rather than swapped ends, because the
+ends are sorted already: a pair keeps its one row and the direction says
+which end comes first. Every link that existed before the migration is a
+plain connection.
+
+All of it is written through `mutate` (`src/worker/mutate/index.ts`):
+
+- `link` takes `{a, b}` for a plain connection or
+  `{depends: {before, after}}` for a dependency. The Worker sorts the pair
+  and works out the direction, so the caller need not know the sorted
+  order. Linking a pair that is already linked changes its direction
+  instead of making a second row.
+- `relink` changes the direction of an existing link (`related: true` for a
+  plain connection, or `depends` between the same two items). The generic
+  `update` action no longer applies to links, so a direction can only
+  change this way.
+- A dependency is only allowed between two tasks ("A dependency can only be
+  between two tasks."), and a link can only be changed between the two
+  items it joins ("A link can only be changed between the two items it
+  joins.").
+- A dependency that would make a circle of tasks waiting for each other is
+  refused ("That would make a circle of tasks waiting for each other.").
+  The check reads the open dependency links, leaves out the link being
+  changed (so a dependency can be turned around) and counts the edges
+  written earlier in the same `mutateMany` batch, so one batch cannot make
+  a circle either. A revert that puts a direction back is checked the same
+  way.
+- Ticking a task off is never refused, but `MutationResult` carries
+  `warnings` when the task still waits for a task that is not done yet
+  ("Waits for \"Book plumber\", which is not done yet."). The API and
+  Claude's `update_task` pass them on.
+
+A direction change is written as an `update` event whose before and after
+hold the direction: the events table's action CHECK cannot be widened
+without rebuilding an append-only table (SPEC 4.1).
+
 ## API conventions
 
 - Hono routers typed `Hono<AppBindings>`; the signed-in user is `c.get("user")`.
@@ -130,6 +177,14 @@ Rules for all code:
 - Every mutating `/api` request must be same-origin: the gate rejects a
   request whose `Origin` header is present and differs from the Worker's
   origin, or whose `Sec-Fetch-Site` is `cross-site`.
+- Link bodies are validated in `api/links.ts`: `POST /api/links` takes
+  `{a, b}` for a plain connection or `{depends: {before, after}}` for a
+  dependency, and `PATCH /api/links/:id` takes `{direction: "none"}` or
+  `{depends: {before, after}}` to change how the two items relate. Each body
+  is one `z.strictObject` with optional fields and a `.refine`, so the
+  per-field messages survive.
+- A mutation response may carry `warnings` (only when there is something to
+  say): ticking a task off while it still waits for an open task says so.
 - Never log, echo or persist a login phrase, a session token, the
   ElevenLabs key or an OAuth token.
 
@@ -265,6 +320,14 @@ The connector Claude talks to (SPEC sections 5 and 7) has three layers:
   attribution come from the single write path. The `run` guard inside
   `mutate` refuses a run that is finished, someone else's, or over two hours
   old, so a dead run cannot write.
+
+Links reach Claude through the same rules: `link_items` takes an optional
+`kind` (`related`, the default, or `depends`, which says that `a` must be
+done before `b`), `get_board` returns each link as `{a, b, kind, before}`
+with `before` the end that must be done first (null for a plain connection),
+and `update_task` returns the warnings when a task is ticked off while it
+still waits for a task that is not done yet. The tool descriptions say when
+a dependency is the right thing; the Worker enforces the two rules itself.
 
 Email captures carry what Claude needs to act on them safely (SPEC 11.4).
 Every `get_inbox` item has `ready` — the same rule `start_run` claims by, kept

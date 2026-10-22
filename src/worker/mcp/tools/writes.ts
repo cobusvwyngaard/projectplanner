@@ -200,7 +200,7 @@ export async function updateTask(
     };
     source_capture_ids: string[];
   },
-): Promise<{ id: string }> {
+): Promise<{ id: string; warnings?: string[] }> {
   const { db, userId, now } = ctx;
   const task = await getRow(db, "task", input.id);
   if (!task || task.archived_at !== null) throw new NotFoundError("No open task with that id.");
@@ -228,26 +228,32 @@ export async function updateTask(
     },
     { now },
   );
-  return { id: result.id };
+  // Ticking a task off is never refused, but the person is told what it still
+  // waits for.
+  return result.warnings.length > 0 ? { id: result.id, warnings: result.warnings } : { id: result.id };
 }
 
 export async function linkItems(
   ctx: ToolContext,
-  input: { run_id: string; a: ItemRef; b: ItemRef; source_capture_ids?: string[] },
+  input: {
+    run_id: string;
+    a: ItemRef;
+    b: ItemRef;
+    /** "related" for a plain connection, "depends" when a must be done before b */
+    kind?: "related" | "depends";
+    source_capture_ids?: string[];
+  },
 ): Promise<{ ok: true }> {
   const { db, userId, now } = ctx;
   for (const ref of [input.a, input.b]) await requireOpen(db, ref.type, ref.id);
   await checkSourceCaptures(db, input.source_capture_ids ?? []);
+  const sourceCaptureIds = input.source_capture_ids ?? [];
   await mutate(
     db,
     claudeActor(userId, input.run_id),
-    {
-      entity: "link",
-      action: "link",
-      a: input.a,
-      b: input.b,
-      sourceCaptureIds: input.source_capture_ids ?? [],
-    },
+    input.kind === "depends"
+      ? { entity: "link", action: "link", depends: { before: input.a, after: input.b }, sourceCaptureIds }
+      : { entity: "link", action: "link", a: input.a, b: input.b, sourceCaptureIds },
     { now },
   );
   return { ok: true };

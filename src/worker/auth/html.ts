@@ -18,16 +18,16 @@ export function escapeHtml(value: string): string {
 const STYLE = `
 :root {
   color-scheme: light dark;
-  --bg: #f4f2ec; --card: #ffffff; --text: #1d2025; --muted: #5a606a; --border: #dcd8cd;
-  --field: #fbfaf7; --accent: #2b6b5a; --accent-hover: #235a4b; --accent-text: #ffffff;
-  --note: #f6d36b; --note-edge: #e0b93f; --focus: rgba(43, 107, 90, 0.35);
+  --bg: #fbf1f4; --card: #ffffff; --text: #241a1f; --muted: #6b5a62; --border: #efd9e1;
+  --field: #fffafc; --accent: #b0306a; --accent-hover: #962858; --accent-text: #ffffff;
+  --note: #f6d36b; --note-edge: #e0b93f; --focus: rgba(176, 48, 106, 0.5);
   --error-bg: #fbe9e6; --error-text: #8a2216; --warn-bg: #fff4d6; --warn-text: #6b4b00;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141619; --card: #1d2024; --text: #e9e7e2; --muted: #a3a9b1; --border: #33373d;
-    --field: #16191c; --accent: #6cc4a9; --accent-hover: #86d2ba; --accent-text: #0d1b16;
-    --note: #d8b44c; --note-edge: #b8952f; --focus: rgba(108, 196, 169, 0.4);
+    --bg: #1a1418; --card: #241c21; --text: #f1e8ec; --muted: #b7a5ad; --border: #3a2f35;
+    --field: #1c1519; --accent: #f28cb8; --accent-hover: #f7a8ca; --accent-text: #2a0a18;
+    --note: #d8b44c; --note-edge: #b8952f; --focus: rgba(242, 140, 184, 0.55);
     --error-bg: #3b1e1a; --error-text: #f5b8ae; --warn-bg: #3a3017; --warn-text: #f1d58a;
   }
 }

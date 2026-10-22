@@ -13,16 +13,16 @@
 }
 
 .board .react-flow {
-  --xy-background-color: #ece9e1;
-  --xy-background-pattern-color: #cdc7b8;
-  --xy-edge-stroke: #8f8878;
+  --xy-background-color: #f6e9ee;
+  --xy-background-pattern-color: #e2c6d1;
+  --xy-edge-stroke: #9c7d89;
   --xy-edge-stroke-width: 2;
   --xy-edge-stroke-selected: var(--accent);
   --xy-connectionline-stroke: var(--accent);
   --xy-connectionline-stroke-width: 2;
   --xy-handle-background-color: var(--surface);
   --xy-handle-border-color: var(--accent);
-  --xy-selection-background-color: rgba(43, 107, 90, 0.08);
+  --xy-selection-background-color: rgba(176, 48, 106, 0.08);
   --xy-selection-border: 1px dashed var(--accent);
   --xy-controls-button-background-color: var(--surface);
   --xy-controls-button-background-color-hover: var(--surface-hover);
@@ -36,10 +36,10 @@
 
 @media (prefers-color-scheme: dark) {
   .board .react-flow {
-    --xy-background-color: #101214;
-    --xy-background-pattern-color: #30353c;
-    --xy-edge-stroke: #7f8792;
-    --xy-selection-background-color: rgba(108, 196, 169, 0.08);
+    --xy-background-color: #140f12;
+    --xy-background-pattern-color: #3a2d34;
+    --xy-edge-stroke: #94808a;
+    --xy-selection-background-color: rgba(242, 140, 184, 0.08);
   }
 }
 

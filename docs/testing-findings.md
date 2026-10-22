@@ -60,6 +60,41 @@ Notes for whoever builds it:
   managers still fill it. Without JavaScript the page still works (hidden).
 - Apply the same control wherever a phrase is typed later (Phase 6 admin).
 
+### 4. A pink colour scheme
+
+Reported 2026-10-22. The owner wants the planner on a pink base instead of
+the current green and beige.
+
+Palette (chosen by the project manager; every text pair checked at 4.5:1 or
+better, board lines at 3:1 or better, in light and dark):
+
+| Token | Light | Dark |
+|---|---|---|
+| --bg | #fbf1f4 | #1a1418 |
+| --surface | #ffffff | #241c21 |
+| --surface-2 | #fdf6f8 | #1f181c |
+| --surface-hover | #f7e6ec | #30262c |
+| --text | #241a1f | #f1e8ec |
+| --muted | #6b5a62 | #b7a5ad |
+| --border | #efd9e1 | #3a2f35 |
+| --border-strong | #dcbcc8 | #54454d |
+| --field | #fffafc | #1c1519 |
+| --accent | #b0306a | #f28cb8 |
+| --accent-hover | #962858 | #f7a8ca |
+| --accent-text | #ffffff | #2a0a18 |
+| --accent-soft | #fbe3ee | #4a2236 |
+| --accent-soft-text | #7f1f4b | #f8c4dc |
+| --focus | rgba(176, 48, 106, 0.5) | rgba(242, 140, 184, 0.55) |
+| --chip-bg | #f3e4ea | #2f262b |
+| --chip-text | #4a3a41 | #e0d2d8 |
+| board background | #f6e9ee | #140f12 |
+| board dots | #e2c6d1 | #3a2d34 |
+| board lines | #9c7d89 | #94808a |
+
+Danger/red, amber, warning, the Claude purple and the yellow notes stay as
+they are, so warnings and "from outside" marks remain distinct from the pink.
+The app icons were regenerated on the pink accent by the project manager.
+
 ## Done
 
 ### 1. Tasks from outside senders must stand out in "Not on the board"

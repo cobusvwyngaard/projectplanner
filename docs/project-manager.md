@@ -129,7 +129,7 @@ Your review, every time:
   wrangler dry run), `npx playwright test` (Playwright 1.56.1; starts
   `scripts/e2e-server.mjs`). npm 10 has an install bug here; use
   `npx npm@11 install` when adding packages, `npm ci` otherwise.
-- Baselines at the last merge (614a35d): 657 tests in 44 files, 48
+- Baselines at the last merge (98bd6c9): 694 tests in 45 files, 48
   Playwright tests.
 - The project manager's working branch is `claude/project-manager`. A push
   to `main` reaches the live site in about two minutes (measured
@@ -148,7 +148,11 @@ transcription, Inbox, Claude connector with 13 tools, Claude connections in
 Settings, email capture with attachments, email addresses per person, the
 home-screen app, board keyboard shortcuts), findings item 1 (tasks from
 outside senders flagged) and findings items 3 and 4 (show the phrase while
-typing, the pink colour scheme; merged 2026-10-22 in 614a35d).
+typing, the pink colour scheme; merged 2026-10-22 in 614a35d), and the
+Worker and Claude half of findings item 2, task dependencies (merged
+2026-10-22 in b948730, with review fixes in 98bd6c9). Dependencies are not
+visible in the app until Prompt C is merged; the owner noticed this on the
+live planner (findings item 2).
 
 The project manager moved to a new Claude account on 2026-10-22; the new
 session proved it can push to `main` and that Cloudflare deploys it.
@@ -180,17 +184,10 @@ scheduled-tasks page.
 Run in this order; each OpenCode prompt starts from the latest `main`.
 
 1. Done: Prompt A (findings items 3 and 4), merged in 614a35d.
-2. **Task dependencies, Worker and Claude** (findings item 2). A branch
-   `opencode/dependencies-worker` (dae3d7d, 21 Oct, based on 43fa823) already
-   exists from an earlier version of Prompt B; it was not merged and the
-   reason is not recorded. On its own base: tsc, build and 688 tests in 45
-   files pass. Known gaps against Prompt B below: the `link_items`
-   description still says relinking "changes nothing", and the "use depends
-   only when…" and "tell the people in the run summary" wording is missing.
-   It changes a direction with an internal `relink` action that writes an
-   `update` event (documented in DECISIONS.md), instead of making
-   `direction` writable. Review it fully and fix or correct it rather than
-   pasting Prompt B, whose branch name would collide with it.
+2. Done: task dependencies, Worker and Claude. The 21 Oct branch
+   `opencode/dependencies-worker` was reviewed and merged in b948730 instead
+   of running Prompt B; the review fixes are in 98bd6c9. Prompt B below is
+   kept only as a record.
 3. **Prompt C: task dependencies, app** (findings item 2). Below.
 4. **Prompt D: final clean-up.** Below.
 5. **The project manager writes HANDOFF.md and FEATURES.md** (not
@@ -297,7 +294,7 @@ REPORT: branch, SHA, git log --oneline origin/main..HEAD, git diff --stat origin
 ### Prompt C: task dependencies, app
 
 ````
-You are working on the Shared Planner (repo cobusvwyngaard/projectplanner): a Cloudflare Worker with a React app (the board uses @xyflow/react). SPEC.md is the source of truth; docs/architecture.md and DECISIONS.md explain the code; docs/testing-findings.md item 2 describes this task and the owner's decisions. The Worker side of task dependencies is merged: links have `direction` ('none', 'a_to_b' = a before b, 'b_to_a'), POST /api/links takes `depends: {before, after}`, PATCH /api/links/:id sets the direction, and completing a task can return `warnings`.
+You are working on the Shared Planner (repo cobusvwyngaard/projectplanner): a Cloudflare Worker with a React app (the board uses @xyflow/react). SPEC.md is the source of truth; docs/architecture.md and DECISIONS.md explain the code; docs/testing-findings.md item 2 describes this task and the owner's decisions. The Worker side of task dependencies is merged: links have `direction` ('none', 'a_to_b' = a before b, 'b_to_a'; the ends a/b are stored sorted, so always work out "before" from the direction, never from a/b order). POST /api/links takes `{a, b}` for a plain link or `{depends: {before, after}}` for a dependency; POST with `{a, b}` on a pair that is already linked changes nothing, so to change an existing link use PATCH /api/links/:id with `{direction: "none"}` (make related) or `{depends: {before, after}}` (make or reverse a dependency). Changing a direction is an event with action 'update' on the link whose before/after hold `direction`. Completing a task can return `warnings: string[]` in the mutation response. A refusal (a dependency involving a note, or a circle) is a 400 with a readable message.
 
 RULES
 - Shell: Windows PowerShell. At the start of every shell call run: $env:PATH = "$env:LOCALAPPDATA\Programs\Git\cmd;$env:LOCALAPPDATA\Programs\nodejs;$env:PATH". Use ; not &&.
@@ -311,6 +308,7 @@ RULES
 OWNER DECISIONS
 - Drawing a connection from task A to task B on the board makes "B depends on A" at once, in the direction drawn, with a quick way to change it on the connection itself (reverse it, or make it related). A connection that involves a note is "related".
 - Completing a task whose prerequisite is still open only warns; it is never refused.
+- The owner reported on the live planner that the direction of a dependency does not seem to work and is not clearly shown. This task is what makes it visible: the arrow must be obvious at normal zoom in light and dark (check it in screenshots), not a faint line.
 
 PART A: logic and store
 1. src/app/lib/ (unit-tested, pure): from the links and tasks in the store, for a task: what it waits for (open prerequisites), what it is needed for, and its related items; a helper turning a link into {before, after} or "related".
@@ -325,6 +323,7 @@ PART B: board, list, tray and panel
    - A cycle refusal from the Worker shows its message as a toast.
 4. Cards, the tray and the List view: an open task waiting for an open task shows "Waiting for <title>" ("Waiting for 2 tasks" when more than one).
 5. Item panel (src/app/panel/LinksSection.tsx): groups "Waits for", "Needed for" and "Related"; each dependency can be reversed or made related; adding a link to a task offers "This task waits for it", "It waits for this task" and "Related".
+5a. Activity and item history (src/app/lib/events.ts): a link event whose diff holds `direction` reads in words, e.g. 'made "Fix the sink" wait for "Book plumber"' or 'made the link between … related', never the raw values a_to_b/b_to_a/none. Unit tests.
 6. Playwright: draw a connection between two tasks and check the arrow direction (assert via the edge's accessible name or a data attribute on the edge, not CSS classes); reverse it from the toolbar; make it related; the panel shows Waits for / Needed for; ticking off the waiting task while its prerequisite is open shows the warning and still completes it; a connection from a note is related.
    Commit "Dependencies: board, lists and panel".
 
@@ -332,7 +331,7 @@ PART C: docs
 7. docs/architecture.md (front end: how dependencies are drawn and changed), docs/testing-findings.md (move item 2 to Done with the SHAs of both tasks).
    Commit "Docs: task dependencies in the app".
 
-CHECKS after PART C: npx tsc -b, npx vitest run (no fewer tests than on main), npm run build, npx playwright test (no fewer than on main). All must pass.
+CHECKS after PART C: npx tsc -b, npx vitest run (baseline 694 tests / 45 files; no fewer), npm run build, npx playwright test (baseline 48; no fewer). All must pass.
 
 REPORT: branch, SHA, git log --oneline origin/main..HEAD, git diff --stat origin/main, and the LAST 5 LINES of each check's actual output, pasted as they appeared. Do not summarise the check results in your own words.
 ````

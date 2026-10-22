@@ -62,7 +62,9 @@ describe("the phrase page", () => {
     expect(html).toContain(`<button type="submit">Sign in</button>`);
     expect(html).toContain(`<input type="hidden" name="next" value="/">`);
     expect(html.match(/<input /g)).toHaveLength(2);
-    expect(html).not.toMatch(/<script|<link|https?:\/\//i);
+    expect(html.match(/<script[^>]*>/gi)).toEqual([`<script src="/login.js" defer>`]);
+    expect(html).not.toMatch(/<link|https?:\/\//i);
+    expect(html).not.toMatch(/\son[a-z]+=/i);
     expect(html).not.toMatch(/user ?name|e-?mail|forgot|reset/i);
     expect(html).not.toContain(LOGIN_FAILED_MESSAGE);
   });

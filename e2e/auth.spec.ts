@@ -16,6 +16,41 @@ test("phrase 1 signs in as Person 1 and returns to the page asked for", async ({
   await expect(page.locator(".me")).toHaveText(me.initials);
 });
 
+test("the phrase can be shown and hidden while typing, and signing in still works", async ({ page }) => {
+  await page.goto("/login");
+  const field = page.getByLabel("Enter your phrase");
+  await field.fill(phrase(1));
+  await expect(field).toHaveAttribute("type", "password");
+  await field.evaluate((el) => {
+    if (el instanceof HTMLInputElement) el.setSelectionRange(1, 1);
+  });
+
+  const show = page.getByRole("button", { name: "Show phrase" });
+  await expect(show).toBeVisible();
+  await show.click();
+  await expect(field).toHaveAttribute("type", "text");
+  await expect(field).toHaveValue(phrase(1));
+  await expect(page.getByRole("button", { name: "Hide phrase" })).toHaveAttribute("aria-pressed", "true");
+  await expect(field).toBeFocused();
+  const cursor = await field.evaluate((el) => {
+    if (!(el instanceof HTMLInputElement)) return null;
+    return [el.selectionStart, el.selectionEnd];
+  });
+  expect(cursor).toEqual([1, 1]);
+
+  await page.getByRole("button", { name: "Hide phrase" }).click();
+  await expect(field).toHaveAttribute("type", "password");
+  await expect(field).toHaveValue(phrase(1));
+  await expect(page.getByRole("button", { name: "Show phrase" })).toHaveAttribute("aria-pressed", "false");
+
+  // Shown once more, then the form still signs in.
+  await page.getByRole("button", { name: "Show phrase" }).click();
+  await expect(field).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).not.toHaveURL(/\/login/);
+  expect((await bootstrap(page)).me.id).toBe(PERSON_1);
+});
+
 test("phrase 2 signs in as Person 2", async ({ page }) => {
   await signIn(page, 2);
   const { me } = await bootstrap(page);

@@ -71,6 +71,14 @@ describe("without a session", () => {
     expectSecurityHeaders(icon);
   });
 
+  it("serves the phrase toggle script without a session", async () => {
+    const res = await call("/login.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("javascript");
+    expect(res.headers.get("Cache-Control")).toBe("no-cache");
+    expectSecurityHeaders(res);
+  });
+
   it("serves the manifest, the service worker and the app icons with the right content types", async () => {
     const manifest = await call("/manifest.webmanifest");
     expect(manifest.status).toBe(200);

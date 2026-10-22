@@ -14,9 +14,13 @@ export function renderLoginPage(options: { next: string; failed: boolean }): str
 ${error}<form method="post" action="/login">
 <input type="hidden" name="next" value="${escapeHtml(options.next)}">
 <label for="phrase">Enter your phrase</label>
-<input id="phrase" name="phrase" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" autofocus required>
+<div class="phrase-row">
+<input id="phrase" name="phrase" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" autofocus required class="phrase-input">
+<button type="button" id="show-phrase" class="secondary phrase-toggle" aria-pressed="false" hidden>Show phrase</button>
+</div>
 <button type="submit">Sign in</button>
 </form>`,
+    `<script src="/login.js" defer></script>`,
   );
 }
 

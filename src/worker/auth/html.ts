@@ -1,5 +1,6 @@
 // The small server-rendered pages (login, consent, errors) share this shell:
-// inline styles only, no scripts, no external resources, light and dark.
+// inline styles, at most one same-origin script, no external resources, light
+// and dark.
 
 const ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -52,11 +53,13 @@ p { margin: 0 0 16px; }
 .muted { color: var(--muted); }
 .small { font-size: 0.875rem; }
 label { display: block; font-weight: 600; margin: 8px 0 6px; }
-input[type="password"] {
-  width: 100%; font: inherit; font-size: 1rem; padding: 12px 14px; border-radius: 10px;
+.phrase-row { display: flex; gap: 8px; align-items: stretch; }
+.phrase-input {
+  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 1rem; padding: 12px 14px; border-radius: 10px;
   border: 1px solid var(--border); background: var(--field); color: var(--text);
 }
-input[type="password"]:focus { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--accent); }
+.phrase-input:focus { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--accent); }
+.phrase-toggle { flex: none; width: auto; margin-top: 0; padding: 0 12px; font-size: 0.875rem; }
 button {
   width: 100%; margin-top: 16px; padding: 12px 16px; border: 1px solid transparent; border-radius: 10px;
   font: inherit; font-weight: 600; background: var(--accent); color: var(--accent-text); cursor: pointer;
@@ -74,7 +77,7 @@ strong { overflow-wrap: anywhere; }
 `;
 
 /** A complete page. `body` must already be escaped HTML. */
-export function renderPage(title: string, body: string): string {
+export function renderPage(title: string, body: string, script = ""): string {
   return `<!doctype html>
 <html lang="en-ZA">
 <head>
@@ -83,6 +86,7 @@ export function renderPage(title: string, body: string): string {
 <meta name="robots" content="noindex, nofollow">
 <title>${escapeHtml(title)}</title>
 <style>${STYLE}</style>
+${script}
 </head>
 <body>
 <main>

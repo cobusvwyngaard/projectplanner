@@ -29,7 +29,7 @@ const FIXED_HEADERS: ReadonlyArray<readonly [string, string]> = [
 const STRICT_TRANSPORT_SECURITY = "max-age=31536000";
 
 /** Files anyone may fetch: they carry no data and the browser needs them before signing in. */
-export const PUBLIC_FILES = ["/manifest.webmanifest", "/sw.js", "/favicon.svg", "/icons/*"] as const;
+export const PUBLIC_FILES = ["/manifest.webmanifest", "/sw.js", "/login.js", "/favicon.svg", "/icons/*"] as const;
 
 function isPublicFile(path: string): boolean {
   return PUBLIC_FILES.some((p) => (p.endsWith("/*") ? path.startsWith(p.slice(0, -1)) : path === p));

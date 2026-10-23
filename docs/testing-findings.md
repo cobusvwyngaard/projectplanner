@@ -62,6 +62,49 @@ live, and the app part (arrows on the board, "Waiting for …" on cards and in
 lists, reversing a dependency on the connection or in the panel) has not
 been built yet. Check this again once the app part is merged.
 
+### 5. Usage records Claude Code can analyse for future development
+
+Reported 2026-10-23 (future development, not urgent). The owner wants a
+record of how the planner is used that the project manager (a Claude Code
+session) can read and analyse, so suggestions for future development rest on
+real use rather than guesses.
+
+What exists today:
+- The `events` table already records every change, sign-in and sign-out,
+  with who (person, or Claude for a person), when, which kind of item and
+  which action. It does not record reading: opening a view, searching or
+  scrolling leave no trace.
+- The Worker's own logs (Cloudflare Workers Logs, `observability` on in
+  `wrangler.jsonc`) hold a few lines per request type and errors, kept for
+  a few days, visible only in the owner's Cloudflare dashboard.
+- A Claude Code session cannot read either: it has no planner session or
+  Cloudflare access, and must not be given secrets.
+
+Proposed (to be settled with the owner before any prompt):
+- **A usage summary, not raw logs.** A Worker route that returns counts
+  only: per day and per person (by user id, or "Claude for <id>"), events
+  by action and item kind, captures by kind, Claude runs started and
+  finished, warnings and refusals, and (if the owner agrees, see below)
+  views opened. Never titles, text, addresses, subjects, file names or
+  phrases, in line with the privacy rule for logs.
+- **Views opened (optional).** Counting which views are opened (board,
+  list, inbox, activity, settings, item panel) needs a small new record:
+  one row per person per view per day, increased on each opening, so it
+  costs one D1 write per opening and stays far inside the free plan. This
+  is first-party counting in the planner's own database, not an analytics
+  service.
+- **How Claude Code reads it.** Options, each needing an owner decision:
+  (a) the owner downloads the summary from Settings as a JSON file and
+  gives it to the project manager (simplest; nothing new can reach the
+  data); (b) a scheduled job writes the summary into the repository
+  (needs a token with push access stored in Cloudflare, which the owner
+  sets); (c) a read-only usage tool on the planner connector (changes the
+  fixed list of 13 tools, so it needs the owner's explicit approval).
+  The project manager recommends (a) first.
+
+Owner decisions needed: whether to count views opened; which way the
+summary reaches Claude Code; how many days of history the summary covers.
+
 ## Done
 
 ### 4. A pink colour scheme

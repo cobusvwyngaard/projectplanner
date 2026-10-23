@@ -201,6 +201,10 @@ Run in this order; each OpenCode prompt starts from the latest `main`.
    beyond the SPEC were built and lists candidates.
 6. Later, and only after the owner has used it in practice: Phase 6 (several
    planners, admin-managed people; SPEC section 12).
+7. Later (future development, owner request 2026-10-23): usage records
+   Claude Code can analyse for development suggestions (findings item 5).
+   Settle the owner decisions listed there before writing a prompt; once
+   built, use the summary to suggest the candidates in FEATURES.md.
 
 New findings from the owner go into docs/testing-findings.md first (with
 proposed details and the owner's decisions), then into a prompt.

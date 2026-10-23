@@ -3,7 +3,7 @@
 
 import { actorLabel, eventActor, userName, type UserLookup } from "../../shared/actors";
 import { formatDate, excerpt } from "../../shared/format";
-import type { EntityType, EventAction, Id, Label, PlannerEvent, SettingKey } from "../../shared/types";
+import type { EntityType, EventAction, Id, Label, LinkDirection, PlannerEvent, SettingKey } from "../../shared/types";
 
 export interface FieldChange {
   /** Field name as stored, or "position" / "size" for combined coordinates */
@@ -218,12 +218,71 @@ function fieldChange(field: string, before: unknown, after: unknown, ctx: Descri
   return change;
 }
 
+/**
+ * The relation a link event describes, when it changes how two items relate.
+ * A plain connection's creation keeps its "linked" wording.
+ */
+function relationChange(event: PlannerEvent): LinkDirection | null {
+  const after = event.after;
+  if (after === null) return null;
+  const direction = after.direction;
+  if (direction !== "none" && direction !== "a_to_b" && direction !== "b_to_a") return null;
+  if (event.action === "update" || (event.action === "create" && direction !== "none")) return direction;
+  return null;
+}
+
+/** A link end's title, falling back to its id. */
+function linkEndTitle(type: string, id: string, ctx: DescribeContext): string {
+  return ctx.titles[`${type}:${id}`] ?? id;
+}
+
+/**
+ * The titles of a link's two ends in stored a/b order. Create events carry the
+ * ends; a direction change only carries the link, whose title reads "A ↔ B".
+ */
+function linkEndTitles(event: PlannerEvent, ctx: DescribeContext): [string, string] | null {
+  const after = event.after ?? {};
+  const before = event.before ?? {};
+  const aType = before.a_type ?? after.a_type;
+  const aId = before.a_id ?? after.a_id;
+  const bType = before.b_type ?? after.b_type;
+  const bId = before.b_id ?? after.b_id;
+  if (typeof aType === "string" && typeof aId === "string" && typeof bType === "string" && typeof bId === "string") {
+    return [linkEndTitle(aType, aId, ctx), linkEndTitle(bType, bId, ctx)];
+  }
+  const title = ctx.titles[`link:${event.entity_id}`];
+  if (title === undefined) return null;
+  const parts = title.replace(/^Link: /, "").split(" ↔ ");
+  const [a, b] = parts;
+  return parts.length === 2 && a !== undefined && b !== undefined ? [a, b] : null;
+}
+
+/** How a link's relation reads in words, never as "a_to_b" / "b_to_a" / "none". */
+function relationText(direction: LinkDirection, ends: [string, string] | null): string {
+  if (ends === null) return direction === "none" ? "the link related" : "the link a dependency";
+  const [a, b] = ends;
+  if (direction === "none") return `the link between “${a}” and “${b}” related`;
+  const [before, after] = direction === "a_to_b" ? [a, b] : [b, a];
+  return `“${after}” wait for “${before}”`;
+}
+
 /** The field-level diff of an event, in words. */
 export function eventChanges(event: PlannerEvent, ctx: DescribeContext): FieldChange[] {
   const after = event.after ?? {};
   const before = event.before ?? {};
   const created = event.before === null;
-  if (created && event.entity_type === "link") return [];
+  if (event.entity_type === "link") {
+    const direction = relationChange(event);
+    if (direction === null) return [];
+    return [
+      {
+        field: "direction",
+        label: "Relation",
+        before: null,
+        after: relationText(direction, linkEndTitles(event, ctx)),
+      },
+    ];
+  }
 
   if (event.entity_type === "setting") {
     if (!("value_json" in after)) return [];
@@ -331,6 +390,20 @@ export function eventTitle(event: PlannerEvent, titles: Readonly<Record<string, 
 export function describeEvent(event: PlannerEvent, ctx: DescribeContext): EventView {
   if (event.entity_type === "user_email") return describeUserEmail(event, ctx);
   if (event.entity_type === "attachment") return describeAttachment(event, ctx);
+  if (event.entity_type === "link") {
+    const direction = relationChange(event);
+    if (direction !== null) {
+      return {
+        actor: actorLabel(eventActor(event), ctx.users),
+        verb: "made",
+        noun: relationText(direction, linkEndTitles(event, ctx)),
+        title: null,
+        suffix: "",
+        changes: [],
+        revertible: isRevertible(event),
+      };
+    }
+  }
   const { verb, suffix } = verbFor(event);
   const session = event.entity_type === "session";
   return {

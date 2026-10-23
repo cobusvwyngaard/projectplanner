@@ -15,7 +15,7 @@ import type { Id, ItemRef, Label, Link, NoteView, SettingKey, SettingsMap, TaskV
 import { api } from "./api";
 import { roundPosition } from "./lib/board";
 import { store } from "./store";
-import { attempt, reportError } from "./toast";
+import { attempt, reportError, showToast } from "./toast";
 
 /** Note size limits of the API. */
 export const NOTE_SIZE = { minWidth: 120, maxWidth: 2000, minHeight: 80, maxHeight: 2000 } as const;
@@ -50,9 +50,26 @@ export function updateTask(id: Id, patch: UpdateTaskRequest): Promise<TaskView |
 
 /** Tick a task off or reopen it. */
 export function setTaskDone(id: Id, done: boolean): Promise<TaskView | undefined> {
-  return attempt(() =>
-    store.change("task", id, { status: done ? "done" : "open" }, () => (done ? api.completeTask(id) : api.reopenTask(id))),
-  );
+  return attempt(async () => {
+    if (done) {
+      const response = await api.completeTask(id);
+      store.applyMutation("task", response);
+      if (response.warnings && response.warnings.length > 0) {
+        for (const warning of response.warnings) {
+          showToast(`Done. ${warning}`, "info");
+        }
+      }
+      return response.row;
+    }
+    const response = await api.reopenTask(id);
+    store.applyMutation("task", response);
+    if (response.warnings && response.warnings.length > 0) {
+      for (const warning of response.warnings) {
+        showToast(warning, "info");
+      }
+    }
+    return response.row;
+  });
 }
 
 export interface Move {
@@ -116,8 +133,44 @@ export function linkItems(a: ItemRef, b: ItemRef): Promise<Link | undefined> {
   });
 }
 
+export function createDependency(before: ItemRef, after: ItemRef): Promise<Link | undefined> {
+  return attempt(async () => {
+    const response = await api.createLink({ depends: { before, after } });
+    store.applyMutation("link", response);
+    return response.row;
+  });
+}
+
+export function makeRelated(linkId: Id): Promise<Link | undefined> {
+  return attempt(async () => {
+    const response = await api.updateLink(linkId, { direction: "none" });
+    store.applyMutation("link", response);
+    return response.row;
+  });
+}
+
+export function makeDependency(linkId: Id, before: ItemRef, after: ItemRef): Promise<Link | undefined> {
+  return attempt(async () => {
+    const response = await api.updateLink(linkId, { depends: { before, after } });
+    store.applyMutation("link", response);
+    return response.row;
+  });
+}
+
+export function reverseDependency(linkId: Id, before: ItemRef, after: ItemRef): Promise<Link | undefined> {
+  return attempt(async () => {
+    const response = await api.updateLink(linkId, { depends: { before, after } });
+    store.applyMutation("link", response);
+    return response.row;
+  });
+}
+
 export function unlink(linkId: Id): Promise<Link | undefined> {
-  return attempt(() => store.change("link", linkId, null, () => api.unlink(linkId)));
+  return attempt(async () => {
+    const response = await api.unlink(linkId);
+    store.applyMutation("link", response);
+    return response.row;
+  });
 }
 
 /** Archive or unarchive a note or task. Resolves to the row afterwards. */

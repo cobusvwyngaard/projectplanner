@@ -24,6 +24,7 @@ import type {
   RunsResponse,
   SessionsResponse,
   UpdateLabelRequest,
+  UpdateLinkRequest,
   UpdateNoteRequest,
   UpdateTaskRequest,
   UpdateCaptureRequest,
@@ -213,6 +214,8 @@ export const api = {
   unarchiveTask: (id: Id) => request<MutationResponse<TaskView>>("POST", `/api/tasks/${seg(id)}/unarchive`),
 
   createLink: (body: CreateLinkRequest) => request<MutationResponse<Link>>("POST", "/api/links", { body }),
+  updateLink: (id: Id, body: UpdateLinkRequest) =>
+    request<MutationResponse<Link>>("PATCH", `/api/links/${seg(id)}`, { body }),
   unlink: (id: Id) => request<MutationResponse<Link>>("POST", `/api/links/${seg(id)}/unlink`),
 
   createLabel: (body: CreateLabelRequest) => request<MutationResponse<Label>>("POST", "/api/labels", { body }),

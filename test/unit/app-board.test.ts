@@ -17,11 +17,53 @@ describe("boardNodes and boardEdges", () => {
   });
 
   it("draws links only between items on the board", () => {
-    const edges = boardEdges(
-      [link({ id: "L1", a_id: "N1", b_id: "T1" }), link({ id: "L2", a_id: "N1", b_id: "T2" })],
-      new Set(["note:N1", "task:T1"]),
-    );
-    expect(edges).toEqual([{ id: "link:L1", type: "link", source: "note:N1", target: "task:T1", data: { id: "L1" } }]);
+    const first = link({ id: "L1", a_id: "N1", b_id: "T1" });
+    const edges = boardEdges([first, link({ id: "L2", a_id: "N1", b_id: "T2" })], new Set(["note:N1", "task:T1"]));
+    expect(edges).toEqual([
+      {
+        id: "link:L1",
+        type: "link",
+        source: "note:N1",
+        target: "task:T1",
+        data: { id: "L1", link: first, relation: "related", directionLabel: "Related link" },
+        ariaLabel: "Related link",
+      },
+    ]);
+  });
+
+  it("points dependency arrows from the first task to the waiting task", () => {
+    const ends = { a_type: "task", a_id: "T1", b_type: "task", b_id: "T2" } as const;
+    const forward = link({ id: "L1", ...ends, direction: "a_to_b" });
+    const backward = link({ id: "L2", ...ends, direction: "b_to_a" });
+    const nodes = new Set(["task:T1", "task:T2"]);
+    expect(boardEdges([forward, backward], nodes)).toEqual([
+      {
+        id: "link:L1",
+        type: "link",
+        source: "task:T1",
+        target: "task:T2",
+        data: {
+          id: "L1",
+          link: forward,
+          relation: { before: { type: "task", id: "T1" }, after: { type: "task", id: "T2" } },
+          directionLabel: "Dependency",
+        },
+        ariaLabel: "Dependency",
+      },
+      {
+        id: "link:L2",
+        type: "link",
+        source: "task:T2",
+        target: "task:T1",
+        data: {
+          id: "L2",
+          link: backward,
+          relation: { before: { type: "task", id: "T2" }, after: { type: "task", id: "T1" } },
+          directionLabel: "Dependency",
+        },
+        ariaLabel: "Dependency",
+      },
+    ]);
   });
 });
 

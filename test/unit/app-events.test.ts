@@ -55,6 +55,60 @@ describe("describeEvent", () => {
     expect(view.changes).toEqual([]);
   });
 
+  it("says which task waits for which when a dependency is made", () => {
+    const forward = describeEvent(
+      event({
+        seq: 10,
+        entity_type: "link",
+        entity_id: "L1",
+        action: "create",
+        after: { id: "L1", a_type: "note", a_id: "N1", b_type: "task", b_id: "T1", direction: "a_to_b" },
+      }),
+      ctx,
+    );
+    expect(forward).toMatchObject({
+      verb: "made",
+      noun: "“Book flights” wait for “Plan the trip”",
+      title: null,
+      suffix: "",
+      changes: [],
+      revertible: true,
+    });
+    const backward = describeEvent(
+      event({
+        seq: 11,
+        entity_type: "link",
+        entity_id: "L1",
+        action: "create",
+        after: { id: "L1", a_type: "note", a_id: "N1", b_type: "task", b_id: "T1", direction: "b_to_a" },
+      }),
+      ctx,
+    );
+    expect(backward.noun).toBe("“Plan the trip” wait for “Book flights”");
+  });
+
+  it("rewords a direction change without showing raw direction values", () => {
+    const reversed = describeEvent(
+      event({ seq: 12, entity_type: "link", entity_id: "L1", action: "update", before: { direction: "a_to_b" }, after: { direction: "b_to_a" } }),
+      ctx,
+    );
+    expect(reversed).toMatchObject({ verb: "made", noun: "“Plan the trip” wait for “Book flights”", title: null, changes: [] });
+    const related = describeEvent(
+      event({ seq: 13, entity_type: "link", entity_id: "L1", action: "update", before: { direction: "a_to_b" }, after: { direction: "none" } }),
+      ctx,
+    );
+    expect(related.noun).toBe("the link between “Plan the trip” and “Book flights” related");
+    expect([reversed.noun, related.noun].join(" ")).not.toMatch(/a_to_b|b_to_a|none/);
+  });
+
+  it("falls back to words when a direction change cannot name the ends", () => {
+    const view = describeEvent(
+      event({ seq: 14, entity_type: "link", entity_id: "L9", action: "update", before: { direction: "none" }, after: { direction: "a_to_b" } }),
+      ctx,
+    );
+    expect(view).toMatchObject({ verb: "made", noun: "the link a dependency", title: null, changes: [] });
+  });
+
   it("describes sign-ins and settings", () => {
     expect(describeEvent(event({ seq: 8, entity_type: "session", entity_id: "S1", action: "login" }), ctx)).toMatchObject({
       verb: "signed in",
@@ -186,6 +240,18 @@ describe("describeEvent attachments", () => {
 });
 
 describe("eventChanges", () => {
+  it("shows a link's new relation in words", () => {
+    const changes = eventChanges(
+      event({ seq: 19, entity_type: "link", entity_id: "L1", action: "update", before: { direction: "a_to_b" }, after: { direction: "b_to_a" } }),
+      ctx,
+    );
+    expect(changes).toEqual([
+      { field: "direction", label: "Relation", before: null, after: "“Plan the trip” wait for “Book flights”" },
+    ]);
+    const plain = event({ seq: 20, entity_type: "link", entity_id: "L1", action: "create", after: { id: "L1" } });
+    expect(eventChanges(plain, ctx)).toEqual([]);
+  });
+
   it("shows labels, people and dates by name instead of ids", () => {
     const changes = eventChanges(
       event({

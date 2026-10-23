@@ -5,6 +5,7 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { Id, ItemRef, Link, NoteView, TaskView } from "../../shared/types";
 import { itemKey } from "./items";
+import { linkRelation } from "./dependencies";
 
 export interface ItemNodeData extends Record<string, unknown> {
   id: Id;
@@ -15,6 +16,9 @@ export type BoardNode = NoteNode | TaskNode;
 
 export interface LinkEdgeData extends Record<string, unknown> {
   id: Id;
+  link: Link;
+  relation: "related" | { before: ItemRef; after: ItemRef };
+  directionLabel: string;
 }
 export type LinkEdge = Edge<LinkEdgeData, "link">;
 
@@ -43,14 +47,36 @@ export function boardNodes(notes: Iterable<NoteView>, tasks: Iterable<TaskView>)
   return nodes;
 }
 
+function edgeDirectionLabel(link: Link): string {
+  const rel = linkRelation(link);
+  if (rel === "related") return "Related link";
+  return "Dependency";
+}
+
 /** Edges for links whose two items are both on the board. */
 export function boardEdges(links: Iterable<Link>, nodeIds: ReadonlySet<string>): LinkEdge[] {
   const edges: LinkEdge[] = [];
   for (const link of links) {
-    const source = itemKey({ type: link.a_type, id: link.a_id });
-    const target = itemKey({ type: link.b_type, id: link.b_id });
-    if (!nodeIds.has(source) || !nodeIds.has(target)) continue;
-    edges.push({ id: `link:${link.id}`, type: "link", source, target, data: { id: link.id } });
+    const aKey = itemKey({ type: link.a_type, id: link.a_id });
+    const bKey = itemKey({ type: link.b_type, id: link.b_id });
+    if (!nodeIds.has(aKey) || !nodeIds.has(bKey)) continue;
+    const rel = linkRelation(link);
+    const directionLabel = edgeDirectionLabel(link);
+    let source = aKey;
+    let target = bKey;
+    if (rel !== "related") {
+      // Arrow goes from the task that comes first to the waiting task.
+      source = itemKey(rel.before);
+      target = itemKey(rel.after);
+    }
+    edges.push({
+      id: `link:${link.id}`,
+      type: "link",
+      source,
+      target,
+      data: { id: link.id, link, relation: rel, directionLabel },
+      ariaLabel: directionLabel,
+    });
   }
   return edges;
 }

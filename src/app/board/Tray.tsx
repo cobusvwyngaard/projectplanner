@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { CloseIcon } from "../components/icons";
 import { AssigneeChip, DueChip, FromOutsideNote, ItemLabel } from "../components/ui";
 import { taskTitle } from "../lib/items";
+import { waitingForText } from "../lib/dependencies";
 import { trayTasks } from "../lib/list";
 import { openItem } from "../router";
 import { usePlanner } from "../store";
@@ -15,6 +16,7 @@ export const TRAY_MIME = "application/x-planner-task";
 export function Tray({ onClose, onPlace }: { onClose: () => void; onPlace: (taskId: string) => void }) {
   const tasks = usePlanner((s) => s.tasks);
   const labels = usePlanner((s) => s.labels);
+  const links = usePlanner((s) => s.links);
   const unplaced = useMemo(() => trayTasks(tasks.values()), [tasks]);
   return (
     <aside className="tray" aria-labelledby="tray-heading">
@@ -32,31 +34,35 @@ export function Tray({ onClose, onPlace }: { onClose: () => void; onPlace: (task
         <>
           <p className="muted small tray-hint">Drag a task onto the board to place it.</p>
           <ul className="tray-list">
-            {unplaced.map((task) => (
-              <li
-                key={task.id}
-                className="tray-item"
-                style={task.label_id ? { borderLeftColor: labels.get(task.label_id)?.colour_hex } : undefined}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(TRAY_MIME, task.id);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-              >
-                <button type="button" className="link-button tray-title" onClick={() => openItem({ type: "task", id: task.id })}>
-                  {taskTitle(task)}
-                </button>
-                {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
-                <div className="card-meta">
-                  <ItemLabel labelId={task.label_id} small />
-                  <AssigneeChip userId={task.assignee_id} />
-                  <DueChip due={task.due_date} done={false} />
-                  <button type="button" className="button button--small tray-place" onClick={() => onPlace(task.id)}>
-                    Place
+            {unplaced.map((task) => {
+              const waiting = waitingForText({ type: "task", id: task.id }, links.values(), tasks);
+              return (
+                <li
+                  key={task.id}
+                  className="tray-item"
+                  style={task.label_id ? { borderLeftColor: labels.get(task.label_id)?.colour_hex } : undefined}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(TRAY_MIME, task.id);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                >
+                  <button type="button" className="link-button tray-title" onClick={() => openItem({ type: "task", id: task.id })}>
+                    {taskTitle(task)}
                   </button>
-                </div>
-              </li>
-            ))}
+                  {waiting && <p className="task-waiting muted small">{waiting}</p>}
+                  {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
+                  <div className="card-meta">
+                    <ItemLabel labelId={task.label_id} small />
+                    <AssigneeChip userId={task.assignee_id} />
+                    <DueChip due={task.due_date} done={false} />
+                    <button type="button" className="button button--small tray-place" onClick={() => onPlace(task.id)}>
+                      Place
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

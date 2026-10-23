@@ -9,6 +9,7 @@ import { CloseIcon } from "../components/icons";
 import { AssigneeChip, DueChip, FromOutsideNote, ProvenanceLine } from "../components/ui";
 import type { NoteNode, TaskNode } from "../lib/board";
 import { noteTitle, taskTitle } from "../lib/items";
+import { waitingForText } from "../lib/dependencies";
 import { usePlanner } from "../store";
 
 const stop = (e: MouseEvent) => e.stopPropagation();
@@ -58,9 +59,12 @@ export const NoteCard = memo(function NoteCard({ data, selected }: NodeProps<Not
 export const TaskCard = memo(function TaskCard({ data }: NodeProps<TaskNode>) {
   const task = usePlanner((s) => s.tasks.get(data.id));
   const label = usePlanner((s) => (task?.label_id ? s.labels.get(task.label_id) : undefined));
+  const links = usePlanner((s) => s.links);
+  const tasks = usePlanner((s) => s.tasks);
   if (!task) return null;
   const done = task.status === "done";
   const title = taskTitle(task);
+  const waiting = !done ? waitingForText({ type: "task", id: task.id }, links.values(), tasks) : null;
   return (
     <>
       <Handles />
@@ -78,6 +82,7 @@ export const TaskCard = memo(function TaskCard({ data }: NodeProps<TaskNode>) {
         </label>
         <div className="task-main">
           <h3 className="task-title">{title}</h3>
+          {waiting && <p className="task-waiting muted small">{waiting}</p>}
           {task.from_outside !== null && <FromOutsideNote kind={task.from_outside} />}
           <div className="card-meta">
             <AssigneeChip userId={task.assignee_id} />

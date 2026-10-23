@@ -1189,6 +1189,20 @@ fieldset:disabled .chip-option {
   min-width: 0;
 }
 
+.panel-subheading {
+  margin: 12px 0 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
 .type-icon {
   display: inline-flex;
   color: var(--muted);
@@ -1229,6 +1243,30 @@ fieldset:disabled .chip-option {
 
 .picker-results li:last-child .picker-result {
   border-bottom: 0;
+}
+
+.picker-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.picker-results li.picker-choice:last-child {
+  border-bottom: 0;
+}
+
+.picker-choice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.picker-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .picker-result:hover:not(:disabled) {

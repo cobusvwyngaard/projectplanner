@@ -8,6 +8,7 @@ import { createNote, createTask, setTaskDone } from "../actions";
 import { AssigneeChip, DueChip, FromOutsideNote, ItemLabel, ProvenanceLine } from "../components/ui";
 import { useStoredState } from "../hooks";
 import { noteTitle, taskTitle } from "../lib/items";
+import { waitingForText } from "../lib/dependencies";
 import {
   LIST_TABS,
   isListTab,
@@ -117,6 +118,9 @@ export function ListView() {
 function TaskRow({ task }: { task: TaskView }) {
   const done = task.status === "done";
   const title = taskTitle(task);
+  const links = usePlanner((s) => s.links);
+  const tasks = usePlanner((s) => s.tasks);
+  const waiting = !done ? waitingForText({ type: "task", id: task.id }, links.values(), tasks) : null;
   return (
     <li className={`row${done ? " row--done" : ""}`}>
       <label className="row-check" title={done ? "Reopen" : "Tick off"}>
@@ -129,6 +133,7 @@ function TaskRow({ task }: { task: TaskView }) {
       </label>
       <button type="button" className="row-main" onClick={() => openItem({ type: "task", id: task.id })}>
         <span className="row-title">{title}</span>
+        {waiting && <span className="row-excerpt muted">{waiting}</span>}
         <span className="row-meta">
           <ItemLabel labelId={task.label_id} small />
           <AssigneeChip userId={task.assignee_id} />

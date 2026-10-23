@@ -27,7 +27,7 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
-import { NEW_NOTE, createNote, createTask, linkItems, moveItems, placeTask, unlink } from "../actions";
+import { NEW_NOTE, createDependency, createNote, createTask, linkItems, moveItems, placeTask, unlink } from "../actions";
 import { FitIcon, KeyboardIcon, PlusIcon, TrayIcon } from "../components/icons";
 import { isBoolean, useIsPhone, useStoredState } from "../hooks";
 import { nearestFreeSpot, occupiedBoxes, TASK_CARD } from "../../shared/placement";
@@ -147,7 +147,9 @@ function Board() {
   const onConnect = useCallback((connection: Connection) => {
     const a = parseItemKey(connection.source);
     const b = parseItemKey(connection.target);
-    if (a && b && connection.source !== connection.target) void linkItems(a, b);
+    if (!a || !b || connection.source === connection.target) return;
+    // Drawing from one task to another makes a dependency: the source comes first.
+    void (a.type === "task" && b.type === "task" ? createDependency(a, b) : linkItems(a, b));
   }, []);
 
   // Delete/Backspace unlinks the selected links and never removes cards.

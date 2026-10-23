@@ -8,59 +8,8 @@ with the commit that fixed it.
 
 ### 2. Links between tasks must show which task depends on which
 
-Reported 2026-10-21. Today a link has no direction: each pair is stored once
-with its two ends sorted (DECISIONS.md, "Links are stored once per pair"), so
-"A → B" and "B → A" are the same link and the board draws a plain line. The
-owner wants connections between tasks to flow from one task to the other, so
-it is clear which task is the dependent one.
+Done on the Worker and Claude side in `a0fb3e5` and `992c8ba`, and on the app side in `8f19f18` and `243a5f6`. Every link carries a direction (`none`, `a_to_b`, `b_to_a`) with ends stored sorted; a task–task dependency draws an arrow from the task that comes first to the task that waits for it, related links stay plain, and the direction is obvious in light and dark. Drawing from one task to another on the board creates a dependency with the source first; the panel groups **Waits for** / **Needed for** / **Related**, offers **This task waits for it**, **It waits for this task** or **Related** when linking to a task, and can reverse or change a link. An open task waiting for an open task shows **Waiting for …** on its card, in the tray and in the List view. Completing a task that still waits for an open prerequisite warns in a toast but does not refuse it. A dependency involving a note or one that would make a circle is refused with a readable message. Link direction events read in words ("made … wait for …" / "made the link … related"), never raw direction values. Merged on 2026-10-23 after review, with fixes: re-linking an unlinked pair and reverting an unlink now follow the two rules, and linking a pair again without a kind no longer turns a dependency into a plain link.
 
-Wanted:
-- A link between two tasks can say "B depends on A" (A must be done first).
-- The board draws it as an arrow from A to B; the List view and the item
-  panel say it in words.
-
-Details (proposed; owner decisions marked):
-- Two kinds of link: **depends on** (task to task only, directed) and
-  **related** (any note or task, undirected, as today). Existing links become
-  "related"; a migration adds the kind and keeps every current link.
-- The item panel shows "Waits for: A" on B and "Needed for: B" on A, and lets
-  a person make, reverse or remove a dependency.
-- **Owner decision (2026-10-21):** on the board, drawing a connection from
-  task A to task B makes "B depends on A" straight away, in the direction
-  drawn, with a quick way to change it on the link itself (reverse it, or
-  make it "related"). A connection that involves a note is "related".
-- Circular dependencies (A waits for B waits for A) are refused.
-- An open task that waits for an open task shows "Waiting for A" on its card
-  and in the lists.
-- **Owner decision (2026-10-21):** ticking off a task whose prerequisite is
-  still open only warns ("A is not done yet"); it is never refused. This
-  applies to Claude too: the write succeeds and the tool result carries the
-  warning.
-- Claude: link_items gets a kind (and direction), its description explains
-  when a dependency is right (the capture says one thing must happen before
-  another) versus a plain link, and get_board returns the kind and
-  direction. Reverting and history work for the new links as for the old.
-
-**Done on the Worker and Claude side** in `a0fb3e5` and `992c8ba`: every link
-now carries a direction (`none`, `a_to_b`, `b_to_a`), a dependency is only
-allowed between two tasks, a dependency that would make a circle of tasks
-waiting for each other is refused, and ticking a task off while it still
-waits for a task that is not done yet warns instead of being refused. The
-API takes `depends` on `POST /api/links` and `PATCH /api/links/:id`, and
-Claude's `link_items` takes a `kind`, `get_board` returns the kind and
-which end comes first, and `update_task` returns the warning. What is left
-is the app: the arrow on the board, the words in the List view and the item
-panel, and the way to reverse a dependency or turn it back into a plain
-connection. Merged on 2026-10-23 after review, with fixes: re-linking an
-unlinked pair and reverting an unlink now follow the two rules, and linking
-a pair again without a kind no longer turns a dependency into a plain link.
-
-**Owner, 2026-10-23:** on the live planner, the direction of a dependency
-between tasks does not seem to work and is not clearly shown. Expected at
-that point: until the Worker part was merged, nothing for dependencies was
-live, and the app part (arrows on the board, "Waiting for …" on cards and in
-lists, reversing a dependency on the connection or in the panel) has not
-been built yet. Check this again once the app part is merged.
 
 ## Done
 

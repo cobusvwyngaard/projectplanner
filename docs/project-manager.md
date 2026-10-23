@@ -179,6 +179,17 @@ only carry connectors that session holds, and the earlier attempt could not
 attach any; if that happens again the owner creates it in claude.ai's
 scheduled-tasks page.
 
+Created on the new account on 2026-10-23 from this project manager's
+session, at the owner's request, before the connector existed: Routine
+"Planner inbox run" (`trig_01GkArHa8rYvambBuiW2AqZt`), Mon/Wed/Fri 04:59
+Africa/Johannesburg, a fresh session each time, push notification, prompt
+as in section 8, model left at the default (not set to Sonnet). It stores
+**no connectors**: until the owner adds the planner connector and attaches it
+to this Routine (claude.ai Routines page), each run ends with "The planner
+connector is not available in this scheduled run." If the Routine cannot
+take a connector afterwards, the owner creates it again in the Routines page
+with the connector attached and deletes this one.
+
 ## 7. The queue
 
 Run in this order; each OpenCode prompt starts from the latest `main`.

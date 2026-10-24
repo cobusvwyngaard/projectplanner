@@ -105,6 +105,44 @@ Proposed (to be settled with the owner before any prompt):
 Owner decisions needed: whether to count views opened; which way the
 summary reaches Claude Code; how many days of history the summary covers.
 
+### 6. Sign-in on iPhone Safari refused with the right phrase
+
+Reported 2026-10-24: several sign-ins on iPhone Safari on 23 Oct failed
+although the owner checked that the phrase was typed correctly.
+
+Every refusal shows the same message ("That didn't work…", SPEC 3.3), and the
+Worker logs nothing about why, so the cause cannot be read from the code or
+the logs alone. Possible causes, most likely first:
+1. **The phrases are no longer set.** If `LOGIN_PHRASE_1/2` were last set in
+   the dashboard as plain text rather than as secrets, a `wrangler deploy`
+   replaces them with the variables in `wrangler.jsonc` (there are none), so
+   both become blank and every phrase is refused, on every device, with no
+   log line. Three deploys ran between 00:44 and 01:02 on 23 Oct (SA time).
+   Secrets are not affected. Check: Worker → Settings → Variables and
+   Secrets lists both, with type Secret.
+2. **A lockout.** After 5 wrong attempts from one address, every attempt is
+   refused for 15 minutes, then 30, 60 … minutes after each further 5, even
+   with the right phrase, with the same message; the count resets 24 hours
+   after the last failure or lockout. Once (1) or (3) caused a few failures,
+   further correct attempts keep failing.
+3. **The iPhone keyboard changed the phrase.** Since 23 Oct the phrase can be
+   shown, and a shown field is a text field, where iOS autocorrect and Smart
+   Punctuation apply: a straight apostrophe becomes ’, "--" becomes "—", and
+   two spaces become ". ". The planner compares after trimming, collapsing
+   spaces and lower-casing only, so those count as a different phrase. Saved
+   passwords (Keychain) may also fill an old phrase after the reset.
+4. Less likely: the sign-in worked but Safari did not keep the cookie; then
+   the phrase page comes back **without** the red message.
+
+Proposed changes (owner to decide):
+- `autocorrect="off"` on the phrase field, so showing the phrase does not
+  switch on autocorrect.
+- One privacy-safe log line per sign-in attempt with its result word only
+  (`ok`, `no match`, `locked`), and a line when a phrase secret is not set;
+  never the phrase, the address or the user agent.
+- Not proposed: treating ’ as ' or "—" as "--" when comparing, which would
+  change SPEC 3.1's normalisation (fixed); phrases of plain words avoid it.
+
 ## Done
 
 ### 4. A pink colour scheme
